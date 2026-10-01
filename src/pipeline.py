@@ -51,7 +51,9 @@ class VideoProductionPipeline:
                 f"Daily quota for {video_format} on {target_date} is already satisfied! "
                 "Skipping to protect daily quota."
             )
-            quota = self.db.get_daily_quota(target_date)
+            existing_job = self.db.get_job(job_id) if job_id else None
+            if existing_job:
+                return existing_job
             # Create a completed or cancelled marker job if needed
             return self.db.create_job(
                 video_format=video_format,
@@ -64,14 +66,19 @@ class VideoProductionPipeline:
         # Determine Topic
         resolved_topic = topic or topic_rotator.select_next_topic(video_format, target_date)
 
-        # 2. Create Job in DB
-        job = self.db.create_job(
-            video_format=video_format,
-            topic=resolved_topic,
-            slot_name=slot_name,
-            scheduled_time=scheduled_time,
-            job_id=job_id,
-        )
+        # 2. Get or Create Job in DB
+        existing_job = self.db.get_job(job_id) if job_id else None
+        if existing_job:
+            job = existing_job
+            resolved_topic = job.topic or resolved_topic
+        else:
+            job = self.db.create_job(
+                video_format=video_format,
+                topic=resolved_topic,
+                slot_name=slot_name,
+                scheduled_time=scheduled_time,
+                job_id=job_id,
+            )
 
         try:
             # 3. Script Generation

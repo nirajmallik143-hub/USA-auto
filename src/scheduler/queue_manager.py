@@ -11,16 +11,16 @@ from src.config import VideoFormat, settings
 from src.database.models import DailyQuota, JobStatus, VideoJob
 from src.database.state_manager import StateManager, state_manager
 from src.logger import logger
-from src.pipeline import VideoProductionPipeline, pipeline
+from src.pipeline import VideoProductionPipeline, pipeline as default_pipeline
 from src.scheduler.daily_schedule import daily_schedule
 
 
 class QueueManager:
     """Coordinates execution, state tracking, and quota health across the pipeline."""
 
-    def __init__(self, db: Optional[StateManager] = None, pipe: Optional[VideoProductionPipeline] = None):
+    def __init__(self, db: Optional[StateManager] = None, pipeline: Optional[VideoProductionPipeline] = None, pipe: Optional[VideoProductionPipeline] = None):
         self.db = db or state_manager
-        self.pipeline = pipe or pipeline
+        self.pipeline = pipeline or pipe or default_pipeline
 
     def queue_daily_slots(self, target_date: Optional[str] = None) -> List[VideoJob]:
         """

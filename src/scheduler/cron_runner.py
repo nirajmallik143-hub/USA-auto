@@ -104,3 +104,21 @@ class StandaloneScheduler:
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
             logger.info("Scheduler stopped.")
+
+
+if __name__ == "__main__":
+    import signal
+    import sys
+
+    runner = StandaloneScheduler(blocking=True)
+
+    def _signal_handler(sig, frame):
+        logger.info("Received termination signal, stopping scheduler...")
+        runner.shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+    logger.info("Starting StandaloneScheduler in blocking mode...")
+    runner.start()

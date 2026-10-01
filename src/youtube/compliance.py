@@ -3,6 +3,7 @@ COPPA compliance and kid-safety validation for YouTube uploads.
 Ensures mandatory 'Made for Kids' audience designation and child-safe metadata.
 """
 
+import re
 from dataclasses import dataclass
 from typing import List, Tuple
 from src.config import VideoFormat, VideoTopic, settings
@@ -52,10 +53,10 @@ class KidSafetyComplianceValidator:
             is_compliant = False
             reasons.append("Mandatory COPPA requirement failed: YOUTUBE_MADE_FOR_KIDS must be True")
 
-        # Scan for forbidden words in title, description, and tags
-        text_corpus = f"{title.lower()} {description.lower()} {' '.join(t.lower() for t in tags)}"
+        # Scan for forbidden words in title, description, and tags using regex word boundaries
+        text_corpus = f"{title} {description} {' '.join(tags)}"
         for word in FORBIDDEN_KIDS_TERMS:
-            if word in text_corpus.split():
+            if re.search(r"\b" + re.escape(word) + r"\b", text_corpus, re.IGNORECASE):
                 is_compliant = False
                 reasons.append(f"Forbidden term detected in kids metadata: '{word}'")
 

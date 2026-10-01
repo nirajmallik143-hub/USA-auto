@@ -591,8 +591,9 @@ class ScriptGenerator:
             educational_goal=topic_def.educational_goal,
         )
 
+        auth_token = settings.openai_api_key
         headers = {
-            "Authorization": f"******",
+            "Authorization": "Bearer " + auth_token,
             "Content-Type": "application/json",
         }
         payload = {

@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 from src.config import settings
 from src.content.script_generator import ScriptData
 from src.logger import logger
-from src.youtube.client import get_youtube_client
+from src.youtube.client import MockYouTubeClient, get_youtube_client
 from src.youtube.compliance import compliance_validator
 from src.youtube.seo import seo_optimizer
 
@@ -120,8 +120,8 @@ class YouTubeUploader:
 
         # 5. Execute Upload
         try:
-            # Check if live or mock client
-            if hasattr(self.client, "insert") or isinstance(self.client, type(get_youtube_client())):
+            # Check if using MockYouTubeClient or live Google API client
+            if isinstance(self.client, MockYouTubeClient):
                 # Mock client branch
                 req = self.client.videos().insert(
                     part="snippet,status",

@@ -20,14 +20,18 @@ def test_coppa_compliance_validator_clean_content():
 
 def test_coppa_compliance_validator_blocks_unsafe_terms():
     validator = KidSafetyComplianceValidator()
+    # Test with adjacent punctuation (commas, exclamation marks, question marks)
     result = validator.validate_metadata(
-        title="Scary Monster Fight with blood",
-        description="Scary story for kids",
-        tags=["horror", "monster"],
+        title="Look, a monster! Is it scary?",
+        description="A story with blood, fear, and fight.",
+        tags=["kids", "stories"],
         topic=VideoTopic.MORAL_STORIES.value,
     )
     assert result.is_compliant is False
-    assert any("Forbidden term" in r for r in result.reasons)
+    assert any("monster" in r for r in result.reasons)
+    assert any("scary" in r for r in result.reasons)
+    assert any("blood" in r for r in result.reasons)
+    assert any("fight" in r for r in result.reasons)
 
 
 def test_seo_title_optimizer():

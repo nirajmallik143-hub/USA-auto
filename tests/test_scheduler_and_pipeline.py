@@ -100,3 +100,33 @@ def test_pipeline_retry_mechanism(tmp_path, monkeypatch):
     retried_job = pipe.retry_job(failed_job.id)
     assert retried_job.status == JobStatus.COMPLETED
     assert retried_job.youtube_id is not None
+
+
+def test_pipeline_prequeued_job_execution(tmp_path, monkeypatch):
+    db = StateManager(f"sqlite:///{tmp_path}/prequeue_test.db")
+    pipe = VideoProductionPipeline(db=db)
+    qm = QueueManager(db=db, pipeline=pipe)
+
+    mock_mp4 = tmp_path / "mock_video.mp4"
+    mock_mp4.write_text("content")
+
+    monkeypatch.setattr("src.pipeline.video_editor.produce_video", lambda *a, **kw: (mock_mp4, 25.0))
+
+    # Pre-queue slots
+    queued = qm.queue_daily_slots("2026-10-01")
+    first_job = queued[0]
+
+    # Execute pre-queued job using its job_id
+    result = pipe.run_job(
+        video_format=first_job.video_format,
+        topic=first_job.topic,
+        slot_name=first_job.slot_name,
+        scheduled_time=first_job.scheduled_time,
+        job_id=first_job.id,
+        preview_mode=True,
+    )
+
+    assert result.status == JobStatus.COMPLETED
+    assert result.id == first_job.id
+    # Ensure no duplicate jobs were created
+    assert len(db.get_jobs_by_date("2026-10-01")) == 7
