@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "usa-kids-video-pipeline"
+version = "1.0.0"
+description = "Automated video production and YouTube upload pipeline for US kids content"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.0",
+    "moviepy>=2.0.0",
+    "Pillow>=10.2.0",
+    "gTTS>=2.5.0",
+    "numpy>=1.26.0",
+    "requests>=2.31.0",
+    "google-api-python-client>=2.100.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-auth-httplib2>=0.2.0",
+    "apscheduler>=3.10.4",
+    "celery>=5.3.6",
+    "redis>=5.0.1",
+]
+
+[project.scripts]
+video-pipeline = "src.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
