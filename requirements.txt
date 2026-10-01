@@ -1,0 +1,25 @@
+# Core Framework & Settings
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.0
+
+# Video & Audio Production
+moviepy>=2.0.0
+Pillow>=10.2.0
+gTTS>=2.5.0
+numpy>=1.26.0
+
+# HTTP & API Clients
+requests>=2.31.0
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+
+# Scheduling & Asynchronous Queues
+apscheduler>=3.10.4
+celery>=5.3.6
+redis>=5.0.1
+
+# Testing & Code Quality
+pytest>=8.0.0
+pytest-mock>=3.12.0
