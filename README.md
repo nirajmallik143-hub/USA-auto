@@ -251,7 +251,7 @@ The pipeline includes a rich CLI for direct operations, testing, and monitoring:
 
 ### 1. Check System Health & Quota Status
 ```bash
-# Verify all components, FFmpeg, directories, and credentials
+# Run both Shorts and Long preview pipeline checks
 python -m src.cli health
 
 # Check today's quota status and recent jobs
@@ -289,8 +289,8 @@ Runs continuously as a background Python service using APScheduler:
 python -m src.scheduler.cron_runner
 ```
 - Schedules jobs at the 7 configured daily release times.
-- Runs a failed-job retry pass every 30 minutes.
-- Resets daily quota tracker at midnight.
+- Runs a failed-job retry pass every 5 minutes.
+- Stores quota records by local calendar date; a new date starts with fresh targets.
 
 ### Option 2: Celery + Redis (Distributed Cloud)
 For distributed setups running on AWS, GCP, or a dedicated VPS:
@@ -338,7 +338,7 @@ Under the United States Children's Online Privacy Protection Act (COPPA) and You
    }
    ```
 2. **Content Verification**: The script generator prompts enforce positive, gentle, age-appropriate language (preschool through early elementary).
-3. **Safety Filters**: Scripts and metadata are validated against forbidden terms (violence, fear, weapons, adult themes) before rendering begins.
+3. **Safety Filters**: Generated titles, descriptions, tags, narration, captions, and visual descriptions are checked against forbidden terms before rendering.
 
 ---
 
@@ -354,4 +354,4 @@ pytest -v
 pytest --cov=src tests/
 ```
 
-All 24 unit and integration tests execute with zero external API requirements using mocks and the procedural engine.
+The unit and integration tests execute with zero external API requirements using mocks and the procedural engine.

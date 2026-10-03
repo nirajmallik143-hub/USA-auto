@@ -75,6 +75,26 @@ class KidSafetyComplianceValidator:
             reasons=reasons,
         )
 
+    def validate_script(self, script) -> ComplianceResult:
+        """Validate metadata and scene text before rendering a generated script."""
+        scene_text = " ".join(
+            text
+            for scene in script.scenes
+            for text in (scene.narration, scene.visual_description, scene.caption_text)
+        )
+        chapter_text = " ".join(
+            chapter.get("title", "") for chapter in (script.chapters or [])
+        )
+        description = " ".join(
+            (script.description, scene_text, script.call_to_action, chapter_text)
+        )
+        return self.validate_metadata(
+            title=script.title,
+            description=description,
+            tags=script.tags,
+            topic=script.topic,
+        )
+
     def resolve_category_id(self, topic: str) -> str:
         """
         YouTube Category IDs:

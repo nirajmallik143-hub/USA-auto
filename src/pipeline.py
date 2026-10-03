@@ -15,6 +15,7 @@ from src.database.models import JobStatus, VideoJob
 from src.database.state_manager import StateManager, state_manager
 from src.logger import logger
 from src.production.video_editor import video_editor
+from src.youtube.compliance import compliance_validator
 from src.youtube.uploader import youtube_uploader
 
 
@@ -53,14 +54,24 @@ class VideoProductionPipeline:
             )
             existing_job = self.db.get_job(job_id) if job_id else None
             if existing_job:
+                if existing_job.status == JobStatus.PENDING:
+                    return self.db.update_job_status(
+                        existing_job.id,
+                        JobStatus.CANCELLED,
+                        error_message=f"Daily quota for {video_format} on {target_date} is already satisfied.",
+                    )
                 return existing_job
-            # Create a completed or cancelled marker job if needed
-            return self.db.create_job(
+            job = self.db.create_job(
                 video_format=video_format,
                 topic=topic or "quota_reached",
                 slot_name=slot_name,
                 scheduled_time=scheduled_time,
                 job_id=job_id,
+            )
+            return self.db.update_job_status(
+                job.id,
+                JobStatus.CANCELLED,
+                error_message=f"Daily quota for {video_format} on {target_date} is already satisfied.",
             )
 
         # Determine Topic
@@ -84,6 +95,7 @@ class VideoProductionPipeline:
             # 3. Script Generation
             self.db.update_job_status(job.id, JobStatus.GENERATING_SCRIPT, increment_attempt=True)
             script = script_generator.generate_script(video_format=video_format, topic=resolved_topic)
+            self._ensure_script_compliant(script)
 
             self.db.update_job_status(
                 job.id,
@@ -156,13 +168,16 @@ class VideoProductionPipeline:
         logger.info(f"Retrying job {job_id} (attempt {job.attempt_count + 1}/{job.max_retries})")
 
         try:
+            self.db.update_job_status(job.id, JobStatus.GENERATING_SCRIPT, increment_attempt=True)
+
             # Check if script exists, otherwise regenerate
             if job.script_data:
                 script = ScriptData.from_dict(job.script_data)
             else:
-                self.db.update_job_status(job.id, JobStatus.GENERATING_SCRIPT, increment_attempt=True)
                 script = script_generator.generate_script(job.video_format, job.topic)
                 self.db.update_job_status(job.id, JobStatus.ASSEMBLING_VIDEO, script_data=script.to_dict())
+
+            self._ensure_script_compliant(script)
 
             # Check if video exists, otherwise re-render
             video_path = Path(job.video_path) if job.video_path else None
@@ -206,6 +221,12 @@ class VideoProductionPipeline:
             err = f"Retry failed: {str(e)}"
             logger.error(err)
             return self.db.update_job_status(job.id, JobStatus.FAILED, error_message=err)
+
+    @staticmethod
+    def _ensure_script_compliant(script: ScriptData) -> None:
+        result = compliance_validator.validate_script(script)
+        if not result.is_compliant:
+            raise ValueError(f"Script compliance check failed: {'; '.join(result.reasons)}")
 
     def retry_all_failed(self, preview_mode: bool = False, backoff_seconds: Optional[int] = None) -> int:
         """Find all eligible failed jobs and retry them."""
