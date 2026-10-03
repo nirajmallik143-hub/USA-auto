@@ -2,12 +2,14 @@ import json
 import subprocess
 import sys
 from argparse import Namespace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from src import cli, preflight
 from src.config import VideoFormat
+from src.content.script_generator import script_generator
 from src.database.models import JobStatus
 from src.database.state_manager import StateManager
 from src.pipeline import VideoProductionPipeline
@@ -103,6 +105,44 @@ def test_failed_jobs_make_run_daily_exit_nonzero(env, monkeypatch):
 def test_status_check_without_jobs_fails(env):
     ok, problems, _ = cli.evaluate_day("2030-01-01")
     assert not ok
+
+
+def test_cli_uses_configured_timezone_for_today(monkeypatch):
+    class FixedDate:
+        @staticmethod
+        def now(tz=None):
+            current = datetime(2026, 10, 3, 1, tzinfo=timezone.utc)
+            return current.astimezone(tz) if tz else current
+
+    monkeypatch.setattr(cli, "datetime", FixedDate)
+    monkeypatch.setattr("src.cli.settings.timezone", "America/New_York")
+
+    assert cli._today() == "2026-10-02"
+
+
+def test_retry_defers_quota_limited_job(env, monkeypatch, tmp_path):
+    db, pipe, _ = env
+    job = db.create_job(VideoFormat.SHORTS.value, "space_facts", "retry_slot", f"{DATE}T08:00:00+00:00")
+    script = script_generator.generate_script(VideoFormat.SHORTS.value, "space_facts")
+    video = tmp_path / "retry.mp4"
+    video.write_text("video")
+    db.update_job_status(
+        job.id,
+        JobStatus.FAILED,
+        script_data=script.to_dict(),
+        video_path=str(video),
+        increment_attempt=True,
+    )
+    monkeypatch.setattr(
+        "src.pipeline.youtube_uploader.upload_video",
+        lambda **kw: UploadResult(success=False, error_message="quota", error_code="quotaExceeded"),
+    )
+
+    retried = pipe.retry_job(job.id)
+
+    assert retried.status == JobStatus.PENDING
+    assert retried.error_message.startswith("Deferred:")
+    assert pipe.halt_reason
 
 
 def test_status_check_writes_summary(env, tmp_path):
