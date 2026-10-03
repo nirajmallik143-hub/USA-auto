@@ -110,7 +110,6 @@ The pipeline distributes 7 video releases throughout the day (US Eastern Time):
 
 ```
 .
-├── .env.example                     # Environment variables template
 ├── Dockerfile                       # Production container definition
 ├── docker-compose.yml               # Celery, Redis, & standalone orchestration
 ├── pyproject.toml                   # Project packaging and metadata
@@ -207,11 +206,11 @@ Pydroid can run individual jobs, but Android may stop background apps, so the co
    ```
    If Pillow or NumPy cannot be installed with pip, install them using Pydroid's repository plugin.
 3. Provide an FFmpeg executable that can run from Pydroid's app environment, and set `FFMPEG_BINARY` to its full path before starting Python. Android may prevent executing binaries from shared storage; the binary must be executable from the app.
-4. Start with a single preview job (YouTube dry-run is enabled by default):
+4. Run `make.py` in Pydroid 3 and follow the prompts to generate one preview. The launcher forces YouTube dry-run mode, so it will not upload:
    ```bash
-   python -m src.cli generate-one --format shorts --topic animal_riddles --preview
+   python make.py
    ```
-   Generated files are saved under the repository's `output/` directory. For a real upload, configure YouTube OAuth credentials and explicitly disable dry-run; the phone must remain awake and connected while rendering and uploading.
+   Generated files are saved under the repository's `output/` directory. This launcher is for previews only; use a securely configured desktop or cloud host for real uploads.
 
 The Android dependency profile omits Celery and Redis, which are only needed for distributed cloud workers. If package installation or FFmpeg execution is blocked by the device or Pydroid, run the pipeline on a desktop or cloud host instead.
 
@@ -219,10 +218,11 @@ The Android dependency profile omits Celery and Redis, which are only needed for
 
 ## Environment Configuration
 
-Copy `.env.example` to `.env` and configure your API keys:
+There are no checked-in environment files. By default, the pipeline uses its built-in template content generator, Google Text-to-Speech, and YouTube dry-run mode. Configure optional API keys as environment variables on a trusted host when needed; do not commit secrets.
 
 ```bash
-cp .env.example .env
+export OPENAI_API_KEY=your_openai_api_key
+export PIXABAY_API_KEY=your_pixabay_api_key
 ```
 
 Key environment variables:
