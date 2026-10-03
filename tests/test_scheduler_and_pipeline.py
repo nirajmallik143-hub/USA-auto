@@ -147,3 +147,16 @@ def test_pipeline_prequeued_job_execution(tmp_path, monkeypatch):
     assert result.id == first_job.id
     # Ensure no duplicate jobs were created
     assert len(db.get_jobs_by_date("2026-10-01")) == 7
+
+
+def test_live_youtube_client_fails_instead_of_silently_mocking(tmp_path, monkeypatch):
+    from src.youtube.client import get_youtube_client
+
+    monkeypatch.setattr("src.youtube.client.settings.youtube_dry_run", False)
+    monkeypatch.setattr(
+        "src.youtube.client.settings.youtube_credentials_file",
+        tmp_path / "missing_credentials.json",
+    )
+
+    with pytest.raises(RuntimeError, match="youtube-auth"):
+        get_youtube_client()

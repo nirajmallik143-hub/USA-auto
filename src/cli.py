@@ -15,6 +15,7 @@ from src.pipeline import pipeline
 from src.scheduler.cron_runner import StandaloneScheduler
 from src.scheduler.daily_schedule import daily_schedule
 from src.scheduler.queue_manager import queue_manager
+from src.youtube.client import authenticate_youtube
 
 
 def cmd_generate_one(args):
@@ -89,6 +90,12 @@ def cmd_retry_failed(args):
     print(f"Retry run complete. Successfully recovered: {recovered} jobs.")
 
 
+def cmd_youtube_auth(args):
+    """Authorize this installation for live YouTube uploads."""
+    authenticate_youtube()
+    print(f"YouTube authorization saved to {settings.youtube_credentials_file}.")
+
+
 def cmd_test_pipeline(args):
     """Quick end-to-end verification of both Shorts and Long generation."""
     print("\n🧪 Running Pipeline Health Check (Shorts & Long in Preview Mode)...")
@@ -152,6 +159,13 @@ def main():
     retry_parser.add_argument("--preview", action="store_true", help="Fast preview rendering mode")
     retry_parser.add_argument("--force", action="store_true", help="Bypass cooldown backoff and retry immediately")
     retry_parser.set_defaults(func=cmd_retry_failed)
+
+    # youtube-auth
+    auth_parser = subparsers.add_parser(
+        "youtube-auth",
+        help="Authorize YouTube uploads and save reusable OAuth credentials",
+    )
+    auth_parser.set_defaults(func=cmd_youtube_auth)
 
     # test-pipeline / health
     test_parser = subparsers.add_parser("test-pipeline", aliases=["health"], help="Run quick end-to-end tests")

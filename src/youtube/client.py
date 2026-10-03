@@ -11,6 +11,8 @@ from pathlib import Path
 from src.config import settings
 from src.logger import logger
 
+YOUTUBE_UPLOAD_SCOPE = ["https://www.googleapis.com/auth/youtube.upload"]
+
 
 class MockYouTubeRequest:
     """Simulates an executable YouTube API request."""
@@ -64,20 +66,72 @@ class MockYouTubeClient:
 
 def get_youtube_client():
     """
-    Returns an authenticated YouTube API client or Mock client if dry run / offline.
+    Returns a live authenticated YouTube API client or the dry-run mock.
     """
-    if settings.youtube_dry_run or not settings.youtube_credentials_file.exists():
-        logger.info("Using MockYouTubeClient (dry run mode or no credentials configured)")
+    if settings.youtube_dry_run:
+        logger.info("Using MockYouTubeClient (dry run mode)")
         return MockYouTubeClient()
 
     try:
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        creds = Credentials.from_authorized_user_file(str(settings.youtube_credentials_file))
+        if not settings.youtube_credentials_file.exists():
+            raise RuntimeError(
+                "YouTube OAuth credentials are not configured. Run "
+                "'python -m src.cli youtube-auth' to authorize this account."
+            )
+
+        creds = Credentials.from_authorized_user_file(
+            str(settings.youtube_credentials_file),
+            scopes=YOUTUBE_UPLOAD_SCOPE,
+        )
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+
+            creds.refresh(Request())
+            _save_credentials(creds)
+        if not creds.valid:
+            raise RuntimeError(
+                "YouTube OAuth credentials are invalid or expired. Run "
+                "'python -m src.cli youtube-auth' to authorize this account again."
+            )
+
         client = build("youtube", "v3", credentials=creds)
         logger.info("Authenticated live YouTube Data API v3 client")
         return client
+    except RuntimeError:
+        raise
     except Exception as e:
-        logger.warning(f"Failed to initialize live YouTube client ({e}), falling back to MockYouTubeClient")
-        return MockYouTubeClient()
+        raise RuntimeError(f"Failed to initialize live YouTube client: {e}") from e
+
+
+def _save_credentials(credentials) -> None:
+    """Persist OAuth tokens with owner-only file permissions where supported."""
+    token_path = settings.youtube_credentials_file
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(credentials.to_json(), encoding="utf-8")
+    token_path.chmod(0o600)
+
+
+def authenticate_youtube():
+    """Run the interactive first-time OAuth flow and persist the refresh token."""
+    if not settings.youtube_client_secrets_file.exists():
+        raise RuntimeError(
+            "YouTube OAuth client secrets were not found at "
+            f"{settings.youtube_client_secrets_file}."
+        )
+
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+
+        flow = InstalledAppFlow.from_client_secrets_file(
+            str(settings.youtube_client_secrets_file),
+            YOUTUBE_UPLOAD_SCOPE,
+        )
+        credentials = flow.run_local_server(port=0)
+        _save_credentials(credentials)
+        logger.info(f"Saved YouTube OAuth credentials to {settings.youtube_credentials_file}")
+        return credentials
+    except Exception as e:
+        raise RuntimeError(f"YouTube OAuth authorization failed: {e}") from e

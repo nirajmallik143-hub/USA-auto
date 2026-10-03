@@ -80,13 +80,22 @@ class YouTubeUploader:
 
         # 3. Scheduling & Privacy Configuration
         privacy_status = settings.youtube_privacy_status
+        if privacy_status == "scheduled":
+            # "scheduled" is not a valid YouTube privacyStatus; future publishAt
+            # timestamps are represented as private videos until release.
+            privacy_status = "public"
+        if privacy_status not in {"public", "private", "unlisted"}:
+            return UploadResult(
+                success=False,
+                error_message=f"Invalid YouTube privacy status: {settings.youtube_privacy_status}",
+            )
         publish_at_iso: Optional[str] = None
 
         if scheduled_publish_time:
             try:
-                # Validate format or parse
                 dt = datetime.fromisoformat(scheduled_publish_time.replace("Z", "+00:00"))
-                # If scheduling in the future, privacy MUST be private
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
                 if dt > datetime.now(timezone.utc):
                     privacy_status = "private"
                     publish_at_iso = dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")

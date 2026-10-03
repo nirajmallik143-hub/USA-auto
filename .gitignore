@@ -25,6 +25,8 @@ MANIFEST
 # Virtual Environments
 .env
 .venv
+secrets/
+*youtube_credentials.json
 env/
 venv/
 ENV/

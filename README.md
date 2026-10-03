@@ -236,12 +236,27 @@ Key environment variables:
 | `ELEVENLABS_API_KEY`| ElevenLabs API Key | `""` |
 | `PEXELS_API_KEY` | Pexels Stock Video API Key | `""` |
 | `YOUTUBE_CLIENT_SECRETS_FILE` | Path to `client_secrets.json` | `client_secrets.json` |
+| `YOUTUBE_CREDENTIALS_FILE` | Path for saved YouTube OAuth token | `secrets/youtube_credentials.json` |
 | `DATABASE_URL` | SQLite or PostgreSQL connection string | `sqlite:///output/pipeline.db` |
 | `REDIS_URL` | Redis URL for Celery | `redis://localhost:6379/0` |
 | `DRY_RUN_UPLOAD` | Set `true` to test uploads without posting | `false` |
 | `COPPA_MADE_FOR_KIDS`| Strict "Made for Kids" enforcement | `true` |
 
 > **Offline Mode**: If `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` are left blank, the pipeline gracefully falls back to the internal procedural script engine and `gTTS` voice generation, requiring zero paid external services for full end-to-end operation!
+
+### Enable live YouTube uploads
+
+1. In Google Cloud Console, enable the YouTube Data API v3, create an OAuth client ID for a desktop app, and download its JSON file to the configured `YOUTUBE_CLIENT_SECRETS_FILE` path. If the OAuth consent screen is in testing, add the YouTube account as a test user.
+2. Keep `YOUTUBE_DRY_RUN=true` while testing. When ready to publish, set it to `false` and authorize the account interactively on a machine with a browser:
+   ```bash
+   python -m src.cli youtube-auth
+   ```
+   The reusable OAuth token is saved to `YOUTUBE_CREDENTIALS_FILE`; it is refreshed automatically when possible. Keep both the OAuth client file and token private. The token is excluded from git.
+3. Start the scheduler on a persistent, internet-connected host:
+   ```bash
+   python -m src.cli run-scheduler
+   ```
+   Live uploads fail clearly when OAuth is missing or invalid rather than reporting a simulated upload as successful. Videos scheduled for a future time are uploaded as private with a `publishAt` time; when a slot's publish time has passed, the video is published immediately using the configured privacy status.
 
 ---
 
@@ -258,7 +273,13 @@ python -m src.cli health
 python -m src.cli status
 ```
 
-### 2. Generate an Ad-Hoc Video
+### 2. Authorize live YouTube uploads
+```bash
+# Run once on an interactive machine after configuring Google OAuth client secrets
+python -m src.cli youtube-auth
+```
+
+### 3. Generate an Ad-Hoc Video
 ```bash
 # Generate a vertical Short (9:16) with animal riddles (preview mode: generates fast 5s preview)
 python -m src.cli run-single --format shorts --topic animal_riddles --preview
@@ -267,13 +288,13 @@ python -m src.cli run-single --format shorts --topic animal_riddles --preview
 python -m src.cli run-single --format long --topic space_facts --preview
 ```
 
-### 3. Run Today's Full Daily Batch
+### 4. Run Today's Full Daily Batch
 ```bash
 # Executes all 7 daily video slots sequentially
 python -m src.cli run-daily --preview
 ```
 
-### 4. Retry Failed Jobs
+### 5. Retry Failed Jobs
 ```bash
 # Scans SQLite database for failed jobs and re-runs them
 python -m src.cli retry
