@@ -1,0 +1,48 @@
+name: Daily USA Kids Videos
+
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 11:00 UTC = 7:00 AM US Eastern
+  workflow_dispatch:         # manual "Run workflow" button
+
+jobs:
+  run-daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Write YouTube credentials
+        run: |
+          echo '${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}' > client_secrets.json
+          echo '${{ secrets.YOUTUBE_TOKEN_JSON }}' > token.json
+
+      - name: Run daily batch
+        env:
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          TTS_PROVIDER: gtts
+          COPPA_MADE_FOR_KIDS: "true"
+          DRY_RUN_UPLOAD: ${{ vars.DRY_RUN_UPLOAD || 'true' }}
+        run: python -m src.cli run-daily
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            logs/
+            output/pipeline.db
