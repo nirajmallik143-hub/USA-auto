@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 from pathlib import Path
 from src.config import VideoFormat, VideoTopic
@@ -7,6 +10,20 @@ from src.pipeline import VideoProductionPipeline
 from src.scheduler.daily_schedule import DailyScheduleManager
 from src.scheduler.queue_manager import QueueManager
 from src.youtube.uploader import YouTubeUploader, UploadResult
+
+
+def test_cli_imports_without_celery():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.modules['celery'] = None; import src.cli",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_daily_schedule_slots_generation():

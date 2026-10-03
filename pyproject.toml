@@ -16,11 +16,16 @@ dependencies = [
     "Pillow>=10.2.0",
     "gTTS>=2.5.0",
     "numpy>=1.26.0",
+    "tzdata>=2025.2",
     "requests>=2.31.0",
     "google-api-python-client>=2.100.0",
     "google-auth-oauthlib>=1.2.0",
     "google-auth-httplib2>=0.2.0",
     "apscheduler>=3.10.4",
+]
+
+[project.optional-dependencies]
+cloud = [
     "celery>=5.3.6",
     "redis>=5.0.1",
 ]

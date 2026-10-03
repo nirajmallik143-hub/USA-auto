@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 import requests
 from gtts import gTTS
 from moviepy import AudioFileClip
+from moviepy.config import FFMPEG_BINARY
 
 from src.config import TTSEngine, settings
 from src.logger import logger
@@ -139,7 +140,7 @@ class VoiceEngine:
         # Try FFmpeg flite filter first
         try:
             cmd = [
-                "ffmpeg", "-y", "-f", "lavfi",
+                FFMPEG_BINARY, "-y", "-f", "lavfi",
                 "-i", f"flite=text='{safe_text}':voice=kal",
                 "-q:a", "2", str(output_path)
             ]
@@ -156,7 +157,7 @@ class VoiceEngine:
         est_duration = max(2.5, words / 2.2)
         try:
             cmd = [
-                "ffmpeg", "-y", "-f", "lavfi",
+                FFMPEG_BINARY, "-y", "-f", "lavfi",
                 "-i", f"sine=frequency=392:duration={est_duration:.2f}",
                 "-af", "volume=0.2",
                 "-q:a", "2", str(output_path)
