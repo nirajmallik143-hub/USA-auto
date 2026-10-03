@@ -18,6 +18,7 @@ Built with strict **COPPA compliance**, resilient job queueing with automatic re
   - [Option 1: Standalone APScheduler (Local / VM)](#option-1-standalone-apscheduler-local--vm)
   - [Option 2: Celery + Redis (Distributed Cloud)](#option-2-celery--redis-distributed-cloud)
   - [Option 3: Docker & Docker Compose](#option-3-docker--docker-compose)
+- [GitHub Actions Automation](#github-actions-automation-fully-automated-uploads)
 - [COPPA & Child Safety Compliance](#coppa--child-safety-compliance)
 - [Testing & Quality Assurance](#testing--quality-assurance)
 
@@ -238,7 +239,7 @@ Key environment variables:
 | `YOUTUBE_CLIENT_SECRETS_FILE` | Path to `client_secrets.json` | `client_secrets.json` |
 | `DATABASE_URL` | SQLite or PostgreSQL connection string | `sqlite:///output/pipeline.db` |
 | `REDIS_URL` | Redis URL for Celery | `redis://localhost:6379/0` |
-| `DRY_RUN_UPLOAD` | Set `true` to test uploads without posting | `false` |
+| `DRY_RUN_UPLOAD` | Alias of `YOUTUBE_DRY_RUN`; set `false` to really upload | `true` locally (workflow sets `false`) |
 | `COPPA_MADE_FOR_KIDS`| Strict "Made for Kids" enforcement | `true` |
 
 > **Offline Mode**: If `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` are left blank, the pipeline gracefully falls back to the internal procedural script engine and `gTTS` voice generation, requiring zero paid external services for full end-to-end operation!
@@ -323,6 +324,46 @@ docker-compose logs -f celery_worker
 # To run the standalone APScheduler container instead:
 docker-compose --profile standalone up -d standalone_scheduler
 ```
+
+---
+
+## GitHub Actions Automation (Fully Automated Uploads)
+
+The workflow `.github/workflows/main.yml` runs `python -m src.cli run-daily` every day (11:00 UTC, with a 15:00 UTC backup run), then `retry-failed`, then verifies the result. It uploads for real by default; use the manual run's **dry_run** input to test.
+
+### One-time setup checklist
+
+1. **Google Cloud project**: create one at <https://console.cloud.google.com/>.
+2. **Enable the API**: APIs & Services > Library > *YouTube Data API v3* > Enable.
+3. **OAuth consent screen**: configure it, add yourself as a user, then click **Publish app** so the status is **In production**. If it stays in *Testing*, Google expires the refresh token after **7 days** and uploads silently stop (`invalid_grant`).
+4. **OAuth client**: Credentials > Create credentials > OAuth client ID > *Desktop app*. Download the JSON and save it locally as `secrets/client_secrets.json` (it is git-ignored).
+5. **Generate the token locally** (a browser window opens; sign in with the YouTube channel owner account):
+   ```bash
+   python -m src.cli auth            # add --no-browser on a headless machine
+   ```
+   This writes `secrets/youtube_credentials.json`, which contains a refresh token.
+6. **Add GitHub secrets** (Settings > Secrets and variables > Actions):
+
+   | Secret | Value |
+   | :--- | :--- |
+   | `YOUTUBE_CLIENT_SECRETS_JSON` | full contents of `secrets/client_secrets.json` |
+   | `YOUTUBE_TOKEN_JSON` | full contents of `secrets/youtube_credentials.json` |
+   | `OPENAI_API_KEY` | optional (needs `LLM_PROVIDER=openai`) |
+   | `PEXELS_API_KEY` | optional stock visuals |
+   | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional failure notifications |
+
+   Repository **variables**: `LLM_PROVIDER` (optional: `procedural` (default), `openai`, `anthropic`).
+7. **Turn uploads on**: nothing to do - scheduled runs upload (`DRY_RUN_UPLOAD=false`). Dry-run only happens when you tick *dry_run* on a manual run.
+8. **Verify**: locally run `python -m src.cli doctor` (checks ffmpeg, credentials, token refresh, channel access, writable dirs). Then run the workflow manually (Actions > *Daily USA Kids Videos* > Run workflow) with *video_count* `1` and check the channel.
+
+### How it stays reliable
+
+- **State** (`output/pipeline.db`) is restored from and saved to the Actions cache on every run (even on failure), so quotas, topic rotation and retries persist. Dry runs use a separate database.
+- **Failures are visible**: `run-daily` / `status --check` exit non-zero when any job FAILED or nothing was uploaded; a GitHub issue (label `automation-failure`) is opened or commented on, and Telegram is notified if configured.
+- **Idempotent**: the primary and backup runs share the daily quota, so a second run never duplicates uploads. Runs are serialized by `concurrency: daily-videos`.
+- **Quota**: each upload costs 1,600 units of the default 10,000/day YouTube API quota (~6 uploads/day). On `quotaExceeded`/`uploadLimitExceeded` the batch stops gracefully and remaining slots are picked up by the next run; request a quota increase for 7 videos/day. New API projects must also pass YouTube's API audit, otherwise uploads are locked as private.
+- **Token refresh**: the access token is refreshed automatically each run from the long-lived refresh token (Google does not rotate it, so the secret needs no update). If it is revoked or expired the run fails with an `invalid_grant` message: re-run `python -m src.cli auth` and update `YOUTUBE_TOKEN_JSON`.
+- **Keep-alive**: `.github/workflows/keepalive.yml` re-enables the scheduled workflows twice a month so GitHub does not disable them after 60 days of inactivity.
 
 ---
 

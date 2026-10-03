@@ -5,7 +5,8 @@ Command-line interface for the automated video production and YouTube upload pip
 import argparse
 import sys
 from datetime import datetime, timezone
-from typing import Optional
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 from src.config import VideoFormat, VideoTopic, settings
 from src.database.models import JobStatus
@@ -49,18 +50,99 @@ def cmd_run_scheduler(args):
         scheduler.shutdown()
 
 
+def evaluate_day(date_str: str) -> Tuple[bool, List[str], List[str]]:
+    """
+    Inspect persisted state for a date.
+    Returns (ok, problems, notes). Not ok when any job ended FAILED or nothing was uploaded.
+    """
+    jobs = state_manager.get_jobs_by_date(date_str)
+    quota = state_manager.get_daily_quota(date_str)
+    completed = quota.completed_shorts + quota.completed_long
+    failed = [j for j in jobs if j.status == JobStatus.FAILED]
+    pending = [j for j in jobs if j.status != JobStatus.COMPLETED and j.status != JobStatus.FAILED]
+
+    problems = [f"{j.id} [{j.video_format}/{j.topic}]: {j.error_message}" for j in failed]
+    notes = []
+    if not jobs:
+        problems.append("No jobs were scheduled for this date.")
+    elif completed == 0:
+        problems.append("No videos were uploaded although jobs were scheduled.")
+    elif pending:
+        notes.append(f"{len(pending)} job(s) still pending (e.g. YouTube quota reached); the next run will continue.")
+    return not problems, problems, notes
+
+
+def report_day(date_str: str, summary_file: Optional[str] = None) -> bool:
+    ok, problems, notes = evaluate_day(date_str)
+    for note in notes:
+        print(f"⚠️  {note}")
+    if ok:
+        print(f"✅ {date_str}: no failed jobs.")
+    else:
+        print(f"❌ {date_str}: problems detected:")
+        for p in problems:
+            print(f"  - {p}")
+    if summary_file:
+        lines = [f"Date: {date_str}", ""] + [f"- {p}" for p in problems] + [f"- (note) {n}" for n in notes]
+        Path(summary_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(summary_file).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return ok
+
+
 def cmd_run_daily_batch(args):
     """Execute all 7 scheduled slots for today sequentially."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     print(f"\n📦 Running Daily Video Batch for {today} (5 Shorts + 2 Long videos)...")
-    results = queue_manager.run_daily_batch(today, preview_mode=args.preview)
-    completed = [r for r in results if r.status == JobStatus.COMPLETED]
+    results = queue_manager.run_daily_batch(today, preview_mode=args.preview, max_videos=getattr(args, "count", None))
+    # Retries inside the batch may have changed statuses; report the persisted state.
+    completed = [r for r in results if (state_manager.get_job(r.id) or r).status == JobStatus.COMPLETED]
     print(f"\nBatch Complete! {len(completed)}/{len(results)} videos successfully published.")
+    if not report_day(today):
+        sys.exit(1)
+
+
+def cmd_auth(args):
+    """Interactive OAuth flow that creates the YouTube token."""
+    from src.youtube.client import YouTubeAuthError, run_auth_flow
+
+    try:
+        path = run_auth_flow(
+            client_secrets_file=args.client_secrets,
+            output_file=args.output,
+            open_browser=not args.no_browser,
+        )
+    except YouTubeAuthError as e:
+        print(f"❌ {e}")
+        sys.exit(1)
+    print(f"\n✅ Token saved to {path}")
+    print("Copy the ENTIRE contents of that file into the GitHub secret YOUTUBE_TOKEN_JSON")
+    print("(and the client secrets file into YOUTUBE_CLIENT_SECRETS_JSON). Never commit either file.")
+
+
+def cmd_doctor(args):
+    """Preflight checks; exits non-zero if any required check fails."""
+    from src.preflight import run_doctor
+
+    print("\n🩺 Running preflight checks...")
+    failed = False
+    for r in run_doctor():
+        icon = "✅" if r.ok else ("⚠️ " if r.warning else "❌")
+        print(f"{icon} {r.name}: {r.message}")
+        if not r.ok and not r.warning:
+            failed = True
+    if failed:
+        print("\nPreflight FAILED. Fix the items marked ❌ above.")
+        sys.exit(1)
+    print("\nPreflight passed.")
 
 
 def cmd_status(args):
     """Display current daily quota status and recent job history."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if getattr(args, "check", False):
+        if not report_day(today, getattr(args, "summary_file", None)):
+            sys.exit(1)
+        return
     quota = state_manager.get_daily_quota(today)
     print(f"\n=======================================================")
     print(f"📊 USA Kids Video Production Pipeline Status ({today})")
@@ -141,11 +223,25 @@ def main():
     # run-daily-batch / run-daily
     batch_parser = subparsers.add_parser("run-daily-batch", aliases=["run-daily"], help="Run all 7 daily videos sequentially")
     batch_parser.add_argument("--preview", action="store_true", help="Fast preview rendering mode")
+    batch_parser.add_argument("--count", type=int, default=None, help="Attempt at most N not-yet-completed videos")
     batch_parser.set_defaults(func=cmd_run_daily_batch)
 
     # status
     status_parser = subparsers.add_parser("status", help="Check daily quota and job states")
+    status_parser.add_argument("--check", action="store_true", help="Exit non-zero if today has failed jobs or no uploads")
+    status_parser.add_argument("--summary-file", default=None, help="With --check, write a markdown problem summary here")
     status_parser.set_defaults(func=cmd_status)
+
+    # auth
+    auth_parser = subparsers.add_parser("auth", help="Create the YouTube OAuth token (run locally)")
+    auth_parser.add_argument("--client-secrets", default=None, help="Path to OAuth client secrets JSON")
+    auth_parser.add_argument("--output", default=None, help="Where to write the token JSON")
+    auth_parser.add_argument("--no-browser", action="store_true", help="Print the URL instead of opening a browser")
+    auth_parser.set_defaults(func=cmd_auth)
+
+    # doctor
+    doctor_parser = subparsers.add_parser("doctor", help="Preflight checks (ffmpeg, env, token, channel, output dir)")
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     # retry-failed / retry
     retry_parser = subparsers.add_parser("retry-failed", aliases=["retry"], help="Retry any failed jobs")

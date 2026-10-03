@@ -24,6 +24,8 @@ MANIFEST
 
 # Virtual Environments
 .env
+*.env
+!.env.example
 .venv
 env/
 venv/
@@ -52,3 +54,10 @@ logs/
 .idea/
 .vscode/
 *.swp
+
+# Credentials and secrets (never commit)
+client_secret*.json
+client_secrets.json
+token.json
+*.pickle
+secrets/

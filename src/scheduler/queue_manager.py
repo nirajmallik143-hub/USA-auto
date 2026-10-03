@@ -71,17 +71,34 @@ class QueueManager:
             enforce_quota=True,
         )
 
-    def run_daily_batch(self, target_date: Optional[str] = None, preview_mode: bool = False) -> List[VideoJob]:
+    def run_daily_batch(
+        self,
+        target_date: Optional[str] = None,
+        preview_mode: bool = False,
+        max_videos: Optional[int] = None,
+    ) -> List[VideoJob]:
         """
         Immediately execute all 7 jobs for the target date sequentially.
-        Useful for local batch processing or testing full daily quota.
+        Already completed slots are skipped (idempotent), so repeated runs never duplicate uploads.
+        ``max_videos`` limits how many not-yet-completed slots are attempted.
+        Stops early when YouTube quota/auth problems make further uploads pointless.
         """
         date_str = target_date or datetime.now(zoneinfo.ZoneInfo(settings.timezone)).strftime("%Y-%m-%d")
         logger.info(f"Starting daily batch execution for {date_str} (7 jobs)")
         queued = self.queue_daily_slots(date_str)
 
         results = []
+        attempted = 0
+        self.pipeline.halt_reason = None
         for job in queued:
+            if job.status != JobStatus.COMPLETED:
+                if max_videos is not None and attempted >= max_videos:
+                    logger.info(f"Reached requested video count ({max_videos}), stopping batch.")
+                    break
+                if self.pipeline.halt_reason:
+                    logger.warning(f"Stopping batch, uploads halted: {self.pipeline.halt_reason}")
+                    break
+                attempted += 1
             logger.info(f"--- Executing slot: {job.slot_name} [{job.video_format}] on '{job.topic}' ---")
             res = self.execute_slot_job(job.id, preview_mode=preview_mode)
             if res:

@@ -18,11 +18,33 @@ from src.production.video_editor import video_editor
 from src.youtube.uploader import youtube_uploader
 
 
+class UploadHalted(RuntimeError):
+    """Upload failed for a reason that will affect every further upload in this run."""
+
+    def __init__(self, message: str, code: Optional[str]):
+        super().__init__(message)
+        self.code = code
+
+
+QUOTA_ERROR_CODES = {"quotaExceeded", "uploadLimitExceeded", "dailyLimitExceeded"}
+
+
 class VideoProductionPipeline:
     """End-to-end coordinator for the automated video pipeline."""
 
     def __init__(self, db: Optional[StateManager] = None):
         self.db = db or state_manager
+        # Set when quota/auth problems make further uploads pointless; batch runners should stop.
+        self.halt_reason: Optional[str] = None
+
+    @staticmethod
+    def _check_upload(result, default_message: str) -> None:
+        if result.success:
+            return
+        message = result.error_message or default_message
+        if result.should_halt:
+            raise UploadHalted(message, result.error_code)
+        raise RuntimeError(message)
 
     def run_job(
         self,
@@ -112,8 +134,7 @@ class VideoProductionPipeline:
                 scheduled_publish_time=scheduled_time,
             )
 
-            if not upload_result.success:
-                raise RuntimeError(upload_result.error_message or "YouTube upload failed")
+            self._check_upload(upload_result, "YouTube upload failed")
 
             # 6. Complete Job
             completed_job = self.db.update_job_status(
@@ -124,6 +145,15 @@ class VideoProductionPipeline:
             )
             logger.info(f"Video job {job.id} completed successfully! URL: {upload_result.youtube_url}")
             return completed_job
+
+        except UploadHalted as e:
+            self.halt_reason = str(e)
+            if e.code in QUOTA_ERROR_CODES:
+                # Not a real failure: leave the slot pending so the next scheduled run picks it up.
+                logger.warning(f"Job {job.id} deferred, YouTube quota/limit reached ({e.code}): {e}")
+                return self.db.update_job_status(job.id, JobStatus.PENDING, error_message=f"Deferred: {e}")
+            logger.error(f"Job {job.id} failed, uploads halted: {e}")
+            return self.db.update_job_status(job.id, JobStatus.FAILED, error_message=f"Pipeline execution failed: {e}")
 
         except Exception as e:
             error_msg = f"Pipeline execution failed: {str(e)}"
@@ -190,8 +220,7 @@ class VideoProductionPipeline:
                 scheduled_publish_time=job.scheduled_time,
             )
 
-            if not upload_res.success:
-                raise RuntimeError(upload_res.error_message or "Upload failed on retry")
+            self._check_upload(upload_res, "Upload failed on retry")
 
             completed_job = self.db.update_job_status(
                 job.id,
@@ -201,6 +230,11 @@ class VideoProductionPipeline:
             )
             logger.info(f"Job {job.id} succeeded on retry! URL: {upload_res.youtube_url}")
             return completed_job
+
+        except UploadHalted as e:
+            self.halt_reason = str(e)
+            logger.error(f"Retry of job {job.id} halted: {e}")
+            return self.db.update_job_status(job.id, JobStatus.FAILED, error_message=f"Retry failed: {e}")
 
         except Exception as e:
             err = f"Retry failed: {str(e)}"
@@ -217,6 +251,9 @@ class VideoProductionPipeline:
         success_count = 0
 
         for job in failed_jobs:
+            if self.halt_reason:
+                logger.warning(f"Skipping remaining retries, uploads halted: {self.halt_reason}")
+                break
             retried = self.retry_job(job.id, preview_mode=preview_mode)
             if retried and retried.status == JobStatus.COMPLETED:
                 success_count += 1
