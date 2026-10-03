@@ -1,11 +1,14 @@
 import pytest
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from PIL import Image
 
 from src.config import VideoFormat, VideoTopic
 from src.production.audio import BackgroundMusicGenerator
 from src.production.subtitles import SubtitleGenerator
 from src.production.visuals import ProceduralKidBackgroundGenerator
+from src.production import voice
 from src.production.voice import VoiceEngine
 
 
@@ -14,6 +17,26 @@ def test_voice_engine_clean_narration():
     raw = "[Happy giggle] Look at the puppy! (claps hands) Wow!"
     cleaned = ve._clean_narration_text(raw)
     assert cleaned == "Look at the puppy!  Wow!"
+
+
+def test_offline_voice_uses_configured_ffmpeg(monkeypatch, tmp_path):
+    output_path = tmp_path / "voice.mp3"
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        output_path.write_bytes(b"audio")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(voice, "FFMPEG_BINARY", "/app/files/ffmpeg")
+    monkeypatch.setattr(subprocess, "run", run)
+    engine = VoiceEngine()
+    monkeypatch.setattr(engine, "_get_audio_duration", lambda path: 1.0)
+
+    result = engine._synthesize_offline("Hello there!", output_path)
+
+    assert result.engine_used == "flite_offline"
+    assert commands[0][0] == "/app/files/ffmpeg"
 
 
 def test_procedural_background_generation(tmp_path):

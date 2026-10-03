@@ -196,6 +196,25 @@ The pipeline distributes 7 video releases throughout the day (US Eastern Time):
    pip install -r requirements.txt
    ```
 
+### Android / Pydroid 3
+
+Pydroid can run individual jobs, but Android may stop background apps, so the continuous scheduler and daily unattended publishing are not supported on the phone. Video rendering also needs an executable FFmpeg binary; installing the Python `moviepy` package alone does not provide a usable Android FFmpeg binary.
+
+1. Install the Pydroid repository plugin, then put the repository in a folder Pydroid can access and set that folder as its working directory.
+2. In Pydroid's terminal, install the phone runtime dependencies:
+   ```bash
+   pip install -r requirements-android.txt
+   ```
+   If Pillow or NumPy cannot be installed with pip, install them using Pydroid's repository plugin.
+3. Provide an FFmpeg executable that can run from Pydroid's app environment, and set `FFMPEG_BINARY` to its full path before starting Python. Android may prevent executing binaries from shared storage; the binary must be executable from the app.
+4. Start with a single preview job (YouTube dry-run is enabled by default):
+   ```bash
+   python -m src.cli generate-one --format shorts --topic animal_riddles --preview
+   ```
+   Generated files are saved under the repository's `output/` directory. For a real upload, configure YouTube OAuth credentials and explicitly disable dry-run; the phone must remain awake and connected while rendering and uploading.
+
+The Android dependency profile omits Celery and Redis, which are only needed for distributed cloud workers. If package installation or FFmpeg execution is blocked by the device or Pydroid, run the pipeline on a desktop or cloud host instead.
+
 ---
 
 ## Environment Configuration
