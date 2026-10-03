@@ -125,10 +125,8 @@ This guide is for someone using a Redmi or another Android phone who cannot run 
 
 Open your repository on GitHub, then go to **Settings → Secrets and variables → Actions → Secrets → New repository secret**. Add each secret separately:
 
-1. Name: `YOUTUBE_CLIENT_SECRETS_JSON`  
-   Value: the complete contents of the Web application client JSON you downloaded from Google Cloud.
-2. Name: `YOUTUBE_TOKEN_JSON`  
-   Value: the complete token JSON displayed by the Replit program.
+1. **Name:** `YOUTUBE_CLIENT_SECRETS_JSON` — **Value:** the complete contents of the Web application client JSON you downloaded from Google Cloud.
+2. **Name:** `YOUTUBE_TOKEN_JSON` — **Value:** the complete token JSON displayed by the Replit program.
 
 Use **Secrets**, not **Variables**, for these two values. Do not put either JSON file in the repository. After saving the secrets, stop the Replit program and remove its `YOUTUBE_CLIENT_SECRETS_JSON` secret if you no longer need it.
 
