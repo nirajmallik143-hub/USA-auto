@@ -12,6 +12,7 @@ Built with strict **COPPA compliance**, resilient job queueing with automatic re
 - [Key Features](#key-features)
 - [Project Structure](#project-structure)
 - [Prerequisites & Installation](#prerequisites--installation)
+- [Android: Create YouTube OAuth Tokens with Replit](#android-create-youtube-oauth-tokens-with-replit)
 - [Environment Configuration](#environment-configuration)
 - [CLI Usage Guide](#cli-usage-guide)
 - [Running the Scheduler](#running-the-scheduler)
@@ -103,6 +104,12 @@ The pipeline distributes 7 video releases throughout the day (US Eastern Time):
 | `slot_5_afternoon_long` | 04:30 PM | 08:30 PM | Long | 16:9 (Horizontal) | 3–6 min | Science / Dinosaurs |
 | `slot_6_early_evening_short` | 06:30 PM | 10:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Dinosaur Fun Facts |
 | `slot_7_bedtime_short` | 08:00 PM | 12:00 AM | Shorts | 9:16 (Vertical) | 30–50 sec | Bedtime Wonder / Calm Riddle |
+
+---
+
+## Android: Create YouTube OAuth Tokens with Replit
+
+If you only have an Android phone and cannot run Python on it, follow the [Replit YouTube OAuth guide](docs/android-replit-youtube-oauth.md). It explains how to create the tokens and add them to GitHub Actions without putting credentials in this repository.
 
 ---
 
