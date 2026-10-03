@@ -3,13 +3,21 @@ YouTube Data API v3 client factory.
 Provides live Google API client or a fully functional Mock client for dry-run/testing.
 """
 
-import datetime
+import json
 import uuid
 from typing import Any, Dict, Optional
-from pathlib import Path
 
 from src.config import settings
 from src.logger import logger
+
+YOUTUBE_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
+
+
+class YouTubeAuthError(RuntimeError):
+    """Raised when live uploads are requested but credentials are missing or invalid."""
 
 
 class MockYouTubeRequest:
@@ -24,7 +32,6 @@ class MockYouTubeRequest:
         snippet = self.body.get("snippet", {})
         status = self.body.get("status", {})
 
-        # Validation check for Made for Kids compliance
         if not status.get("selfDeclaredMadeForKids"):
             raise ValueError("YouTube API Error: 'selfDeclaredMadeForKids' must be True for kids content!")
 
@@ -62,22 +69,75 @@ class MockYouTubeClient:
         return MockYouTubeVideosResource()
 
 
-def get_youtube_client():
+def _load_token_info() -> Optional[Dict[str, Any]]:
+    """Load the authorized-user token from the env var or the credentials file."""
+    if settings.youtube_token_json and settings.youtube_token_json.strip():
+        return json.loads(settings.youtube_token_json)
+    if settings.youtube_credentials_file.exists():
+        return json.loads(settings.youtube_credentials_file.read_text(encoding="utf-8"))
+    return None
+
+
+def load_live_credentials():
     """
-    Returns an authenticated YouTube API client or Mock client if dry run / offline.
+    Build refreshed Google OAuth credentials for the YouTube Data API.
+    Raises YouTubeAuthError with an actionable message when something is wrong.
     """
-    if settings.youtube_dry_run or not settings.youtube_credentials_file.exists():
-        logger.info("Using MockYouTubeClient (dry run mode or no credentials configured)")
-        return MockYouTubeClient()
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
 
     try:
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
+        token_info = _load_token_info()
+    except json.JSONDecodeError as e:
+        raise YouTubeAuthError(f"YouTube token JSON is not valid JSON: {e}") from e
 
-        creds = Credentials.from_authorized_user_file(str(settings.youtube_credentials_file))
-        client = build("youtube", "v3", credentials=creds)
-        logger.info("Authenticated live YouTube Data API v3 client")
-        return client
-    except Exception as e:
-        logger.warning(f"Failed to initialize live YouTube client ({e}), falling back to MockYouTubeClient")
+    if not token_info:
+        raise YouTubeAuthError(
+            "No YouTube credentials found. Run `python -m src.cli youtube-auth` once on your computer, "
+            "then store the printed JSON as the YOUTUBE_TOKEN_JSON secret "
+            f"(or save it to {settings.youtube_credentials_file})."
+        )
+
+    if not token_info.get("refresh_token"):
+        raise YouTubeAuthError(
+            "YouTube token has no refresh_token, so it cannot be renewed automatically. "
+            "Re-run `python -m src.cli youtube-auth` to generate a new token."
+        )
+
+    creds = Credentials.from_authorized_user_info(token_info, scopes=YOUTUBE_SCOPES)
+
+    if not creds.valid:
+        try:
+            creds.refresh(Request())
+            logger.info("Refreshed YouTube OAuth access token")
+        except Exception as e:
+            raise YouTubeAuthError(
+                f"Could not refresh YouTube token ({e}). If your Google OAuth consent screen is in "
+                "'Testing' mode, refresh tokens expire after 7 days — publish the app to 'In production' "
+                "and re-run `python -m src.cli youtube-auth`."
+            ) from e
+
+    try:
+        settings.youtube_credentials_file.parent.mkdir(parents=True, exist_ok=True)
+        settings.youtube_credentials_file.write_text(creds.to_json(), encoding="utf-8")
+    except OSError as e:
+        logger.warning(f"Could not persist refreshed YouTube token: {e}")
+
+    return creds
+
+
+def get_youtube_client():
+    """
+    Returns an authenticated YouTube API client, or a Mock client in dry-run mode.
+    When dry-run is disabled, credential problems raise instead of silently faking uploads.
+    """
+    if settings.youtube_dry_run:
+        logger.info("Using MockYouTubeClient (YOUTUBE_DRY_RUN=true)")
         return MockYouTubeClient()
+
+    from googleapiclient.discovery import build
+
+    creds = load_live_credentials()
+    client = build("youtube", "v3", credentials=creds, cache_discovery=False)
+    logger.info("Authenticated live YouTube Data API v3 client")
+    return client

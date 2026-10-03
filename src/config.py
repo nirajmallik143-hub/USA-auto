@@ -6,7 +6,7 @@ Loads settings from environment variables and .env file with validated types.
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,13 +57,23 @@ class Settings(BaseSettings):
 
     # Content Generation
     llm_provider: LLMProvider = LLMProvider.TEMPLATE
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def _normalize_llm_provider(cls, value):
+        if isinstance(value, str) and value.strip().lower() in {"procedural", "template", ""}:
+            return LLMProvider.TEMPLATE
+        return value
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
     # Voice / TTS
-    tts_engine: TTSEngine = TTSEngine.GTTS
+    tts_engine: TTSEngine = Field(
+        default=TTSEngine.GTTS,
+        validation_alias=AliasChoices("tts_engine", "tts_provider"),
+    )
     elevenlabs_api_key: Optional[str] = None
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default kid-friendly voice
     elevenlabs_model_id: str = "eleven_monolingual_v1"
@@ -73,10 +83,17 @@ class Settings(BaseSettings):
     pixabay_api_key: Optional[str] = None
 
     # YouTube Settings
-    youtube_dry_run: bool = True
+    youtube_dry_run: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("youtube_dry_run", "dry_run_upload"),
+    )
     youtube_client_secrets_file: Path = Path("secrets/client_secrets.json")
     youtube_credentials_file: Path = Path("secrets/youtube_credentials.json")
+    # Raw JSON contents, so CI can pass credentials as secrets without writing files.
+    youtube_client_secrets_json: Optional[str] = None
+    youtube_token_json: Optional[str] = None
     youtube_privacy_status: str = "scheduled"  # "public", "private", "unlisted", "scheduled"
+    youtube_upload_max_retries: int = 5
     youtube_made_for_kids: bool = True  # Mandatory COPPA designation
     youtube_category_id: str = "27"  # 27 = Education, 24 = Entertainment
 

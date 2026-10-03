@@ -3,8 +3,12 @@ YouTube video uploader with scheduled release slots and COPPA compliance.
 Handles resumable video uploads and tracks upload states.
 """
 
+import http.client
+import random
+import socket
+import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -14,6 +18,11 @@ from src.logger import logger
 from src.youtube.client import MockYouTubeClient, get_youtube_client
 from src.youtube.compliance import compliance_validator
 from src.youtube.seo import seo_optimizer
+
+VALID_PRIVACY_STATUSES = {"public", "private", "unlisted"}
+MIN_SCHEDULE_LEAD_MINUTES = 15
+RETRIABLE_STATUS_CODES = {500, 502, 503, 504}
+RETRIABLE_EXCEPTIONS = (http.client.HTTPException, socket.timeout, ConnectionError, TimeoutError, OSError)
 
 
 @dataclass
@@ -79,17 +88,23 @@ class YouTubeUploader:
             )
 
         # 3. Scheduling & Privacy Configuration
-        privacy_status = settings.youtube_privacy_status
+        configured_privacy = settings.youtube_privacy_status.strip().lower()
+        # "scheduled" is not a YouTube status: it means "private + publishAt", or public if the slot already passed.
+        privacy_status = "public" if configured_privacy == "scheduled" else configured_privacy
+        if privacy_status not in VALID_PRIVACY_STATUSES:
+            logger.warning(f"Unknown YOUTUBE_PRIVACY_STATUS '{configured_privacy}', defaulting to public")
+            privacy_status = "public"
         publish_at_iso: Optional[str] = None
 
-        if scheduled_publish_time:
+        if scheduled_publish_time and configured_privacy in {"scheduled", "public"}:
             try:
-                # Validate format or parse
                 dt = datetime.fromisoformat(scheduled_publish_time.replace("Z", "+00:00"))
-                # If scheduling in the future, privacy MUST be private
-                if dt > datetime.now(timezone.utc):
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                # YouTube requires publishAt to be in the future and the video to be private until then.
+                if dt > datetime.now(timezone.utc) + timedelta(minutes=MIN_SCHEDULE_LEAD_MINUTES):
                     privacy_status = "private"
-                    publish_at_iso = dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    publish_at_iso = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
             except Exception as e:
                 logger.warning(f"Could not parse scheduled_publish_time '{scheduled_publish_time}': {e}")
 
@@ -143,12 +158,13 @@ class YouTubeUploader:
                     part="snippet,status",
                     body=body,
                     media_body=media,
+                    notifySubscribers=True,
                 )
-                response = None
-                while response is None:
-                    _, response = request.next_chunk()
+                response = self._run_resumable_upload(request)
 
             yt_id = response.get("id")
+            if not yt_id:
+                raise RuntimeError(f"YouTube response did not include a video id: {response}")
             yt_url = f"https://www.youtube.com/watch?v={yt_id}"
 
             logger.info(f"Successfully published video to YouTube! ID={yt_id}, URL={yt_url}")
@@ -162,9 +178,54 @@ class YouTubeUploader:
             )
 
         except Exception as e:
-            err_msg = f"YouTube API upload error: {str(e)}"
+            err_msg = f"YouTube API upload error: {self._describe_error(e)}"
             logger.error(err_msg)
             return UploadResult(success=False, error_message=err_msg)
+
+    def _run_resumable_upload(self, request) -> Dict[str, Any]:
+        """Drive a resumable upload, retrying transient network/server errors with backoff."""
+        from googleapiclient.errors import HttpError
+
+        response = None
+        retries = 0
+        while response is None:
+            try:
+                status, response = request.next_chunk()
+                if status:
+                    logger.info(f"Upload progress: {int(status.progress() * 100)}%")
+            except HttpError as e:
+                if e.resp.status not in RETRIABLE_STATUS_CODES:
+                    raise
+                error = e
+            except RETRIABLE_EXCEPTIONS as e:
+                error = e
+            else:
+                continue
+
+            retries += 1
+            if retries > settings.youtube_upload_max_retries:
+                raise RuntimeError(f"Upload failed after {retries - 1} retries: {error}")
+            sleep_seconds = random.uniform(0, 2**retries)
+            logger.warning(f"Transient upload error ({error}); retry {retries} in {sleep_seconds:.1f}s")
+            time.sleep(sleep_seconds)
+
+        return response
+
+    @staticmethod
+    def _describe_error(error: Exception) -> str:
+        """Turn common YouTube API failures into actionable messages."""
+        text = str(error)
+        if "quotaExceeded" in text:
+            return (
+                "Daily YouTube API quota exceeded (each upload costs ~1,600 of the default 10,000 units). "
+                "Remaining videos will retry on the next run, or request a quota increase in Google Cloud. "
+                f"Details: {text}"
+            )
+        if "uploadLimitExceeded" in text:
+            return f"Channel upload limit reached for today. Details: {text}"
+        if "invalid_grant" in text or "unauthorized" in text.lower():
+            return f"YouTube auth failed — re-run `python -m src.cli youtube-auth`. Details: {text}"
+        return text
 
 
 youtube_uploader = YouTubeUploader()

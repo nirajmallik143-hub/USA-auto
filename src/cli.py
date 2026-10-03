@@ -120,6 +120,38 @@ def cmd_test_pipeline(args):
     print("\n🎉 All pipeline health checks PASSED successfully!")
 
 
+def cmd_youtube_auth(args):
+    """One-time interactive OAuth setup that prints the token for the YOUTUBE_TOKEN_JSON secret."""
+    from pathlib import Path
+
+    from src.youtube.auth import authorize, verify_channel
+
+    token_json = authorize(
+        client_secrets_file=Path(args.client_secrets) if args.client_secrets else None,
+        open_browser=not args.no_browser,
+    )
+    channel = verify_channel()
+    print(f"\n✅ Authorized YouTube channel: {channel['title']} ({channel['id']})")
+    print(f"Token saved to: {settings.youtube_credentials_file}")
+    print("\nCopy everything between the lines into a GitHub secret named YOUTUBE_TOKEN_JSON:")
+    print("-" * 60)
+    print(token_json)
+    print("-" * 60)
+
+
+def cmd_youtube_check(args):
+    """Verify YouTube credentials can refresh and reach the channel."""
+    from src.youtube.auth import verify_channel
+    from src.youtube.client import YouTubeAuthError
+
+    try:
+        channel = verify_channel()
+    except YouTubeAuthError as e:
+        print(f"❌ {e}")
+        sys.exit(1)
+    print(f"✅ YouTube credentials OK — channel: {channel['title']} ({channel['id']})")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Automated Video Production & YouTube Upload Pipeline for US Kids Content"
@@ -156,6 +188,16 @@ def main():
     # test-pipeline / health
     test_parser = subparsers.add_parser("test-pipeline", aliases=["health"], help="Run quick end-to-end tests")
     test_parser.set_defaults(func=cmd_test_pipeline)
+
+    # youtube-auth
+    auth_parser = subparsers.add_parser("youtube-auth", help="One-time YouTube OAuth setup (run on your computer)")
+    auth_parser.add_argument("--client-secrets", default=None, help="Path to the OAuth client secrets JSON")
+    auth_parser.add_argument("--no-browser", action="store_true", help="Print the auth URL instead of opening a browser")
+    auth_parser.set_defaults(func=cmd_youtube_auth)
+
+    # youtube-check
+    check_parser = subparsers.add_parser("youtube-check", help="Verify YouTube credentials work")
+    check_parser.set_defaults(func=cmd_youtube_check)
 
     args = parser.parse_args()
     if not args.command:

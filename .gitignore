@@ -52,3 +52,8 @@ logs/
 .idea/
 .vscode/
 *.swp
+
+# YouTube OAuth credentials
+secrets/
+client_secrets.json
+token.json
