@@ -6,7 +6,7 @@ Loads settings from environment variables and .env file with validated types.
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,16 +57,14 @@ class Settings(BaseSettings):
     log_dir: Path = Path("logs")
 
     # Content Generation
-    llm_provider: LLMProvider = LLMProvider.TEMPLATE  # "procedural" is accepted as an alias of "template"
+    llm_provider: Optional[LLMProvider] = Field(default=None)
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
     # Voice / TTS
-    tts_engine: TTSEngine = Field(
-        default=TTSEngine.GTTS, validation_alias=AliasChoices("tts_engine", "tts_provider")
-    )
+    tts_engine: Optional[TTSEngine] = Field(default=None, validation_alias=AliasChoices("tts_engine", "tts_provider"))
     elevenlabs_api_key: Optional[str] = None
     elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default kid-friendly voice
     elevenlabs_model_id: str = "eleven_monolingual_v1"
@@ -116,6 +114,25 @@ class Settings(BaseSettings):
             if value in ("procedural", ""):
                 return LLMProvider.TEMPLATE.value
         return value
+
+    @model_validator(mode="after")
+    def _auto_select_runtime_settings(self):
+        """Select the default runtime provider only when the user leaves the setting unset."""
+        if self.llm_provider is None:
+            if self.openai_api_key:
+                self.llm_provider = LLMProvider.OPENAI
+            elif self.anthropic_api_key:
+                self.llm_provider = LLMProvider.ANTHROPIC
+            else:
+                self.llm_provider = LLMProvider.TEMPLATE
+
+        if self.tts_engine is None:
+            if self.elevenlabs_api_key:
+                self.tts_engine = TTSEngine.ELEVENLABS
+            else:
+                self.tts_engine = TTSEngine.GTTS
+
+        return self
 
     def ensure_directories(self) -> None:
         """Create necessary directories if they do not exist."""

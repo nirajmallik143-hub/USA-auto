@@ -13,6 +13,24 @@ def test_settings_defaults():
     assert s.max_job_retries == 3
 
 
+def test_auto_detects_runtime_providers_from_available_keys(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "oa")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "el")
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("TTS_ENGINE", raising=False)
+    s = Settings(database_url="sqlite:///temp/test.db")
+    assert s.llm_provider == LLMProvider.OPENAI
+    assert s.tts_engine == TTSEngine.ELEVENLABS
+
+
+def test_explicit_provider_overrides_auto_detection(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "oa")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anth")
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    s = Settings(database_url="sqlite:///temp/test.db")
+    assert s.llm_provider == LLMProvider.ANTHROPIC
+
+
 def test_video_format_enum():
     assert VideoFormat.SHORTS.value == "shorts"
     assert VideoFormat.LONG.value == "long"
