@@ -4,6 +4,7 @@ Command-line interface for the automated video production and YouTube upload pip
 
 import argparse
 import sys
+import zoneinfo
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -16,6 +17,10 @@ from src.pipeline import pipeline
 from src.scheduler.cron_runner import StandaloneScheduler
 from src.scheduler.daily_schedule import daily_schedule
 from src.scheduler.queue_manager import queue_manager
+
+
+def _today() -> str:
+    return datetime.now(zoneinfo.ZoneInfo(settings.timezone)).strftime("%Y-%m-%d")
 
 
 def cmd_generate_one(args):
@@ -91,7 +96,7 @@ def report_day(date_str: str, summary_file: Optional[str] = None) -> bool:
 
 def cmd_run_daily_batch(args):
     """Execute all 7 scheduled slots for today sequentially."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _today()
     print(f"\n📦 Running Daily Video Batch for {today} (5 Shorts + 2 Long videos)...")
     results = queue_manager.run_daily_batch(today, preview_mode=args.preview, max_videos=getattr(args, "count", None))
     # Retries inside the batch may have changed statuses; report the persisted state.
@@ -138,7 +143,7 @@ def cmd_doctor(args):
 
 def cmd_status(args):
     """Display current daily quota status and recent job history."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _today()
     if getattr(args, "check", False):
         if not report_day(today, getattr(args, "summary_file", None)):
             sys.exit(1)

@@ -233,6 +233,9 @@ class VideoProductionPipeline:
 
         except UploadHalted as e:
             self.halt_reason = str(e)
+            if e.code in QUOTA_ERROR_CODES:
+                logger.warning(f"Job {job.id} deferred during retry, YouTube quota/limit reached ({e.code}): {e}")
+                return self.db.update_job_status(job.id, JobStatus.PENDING, error_message=f"Deferred: {e}")
             logger.error(f"Retry of job {job.id} halted: {e}")
             return self.db.update_job_status(job.id, JobStatus.FAILED, error_message=f"Retry failed: {e}")
 
