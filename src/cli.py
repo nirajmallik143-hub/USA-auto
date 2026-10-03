@@ -6,6 +6,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 from typing import Optional
+import zoneinfo
 
 from src.config import VideoFormat, VideoTopic, settings
 from src.database.models import JobStatus
@@ -15,6 +16,10 @@ from src.pipeline import pipeline
 from src.scheduler.cron_runner import StandaloneScheduler
 from src.scheduler.daily_schedule import daily_schedule
 from src.scheduler.queue_manager import queue_manager
+
+
+def _today_in_configured_timezone() -> str:
+    return datetime.now(zoneinfo.ZoneInfo(settings.timezone)).strftime("%Y-%m-%d")
 
 
 def cmd_generate_one(args):
@@ -51,7 +56,7 @@ def cmd_run_scheduler(args):
 
 def cmd_run_daily_batch(args):
     """Execute all 7 scheduled slots for today sequentially."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _today_in_configured_timezone()
     print(f"\n📦 Running Daily Video Batch for {today} (5 Shorts + 2 Long videos)...")
     results = queue_manager.run_daily_batch(today, preview_mode=args.preview)
     completed = [r for r in results if r.status == JobStatus.COMPLETED]
@@ -60,7 +65,7 @@ def cmd_run_daily_batch(args):
 
 def cmd_status(args):
     """Display current daily quota status and recent job history."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = _today_in_configured_timezone()
     quota = state_manager.get_daily_quota(today)
     print(f"\n=======================================================")
     print(f"📊 USA Kids Video Production Pipeline Status ({today})")

@@ -1,9 +1,11 @@
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 import pytest
 from pathlib import Path
 from src.config import VideoFormat, VideoTopic
+from src.content.script_generator import Scene, ScriptData
 from src.database.models import JobStatus
 from src.database.state_manager import StateManager
 from src.pipeline import VideoProductionPipeline
@@ -85,6 +87,67 @@ def test_pipeline_dry_run_execution(tmp_path, monkeypatch):
     assert quota.completed_shorts == 1
 
 
+def test_pipeline_cancels_prequeued_job_when_quota_is_met(tmp_path):
+    db = StateManager(f"sqlite:///{tmp_path}/quota_test.db")
+    pipe = VideoProductionPipeline(db=db)
+    scheduled_time = "2026-10-01T08:00:00-04:00"
+    job = db.create_job(
+        video_format=VideoFormat.SHORTS.value,
+        topic=VideoTopic.ANIMAL_RIDDLES.value,
+        slot_name="quota_slot",
+        scheduled_time=scheduled_time,
+    )
+    for _ in range(5):
+        db.record_job_completion("2026-10-01", VideoFormat.SHORTS.value)
+
+    result = pipe.run_job(
+        video_format=job.video_format,
+        topic=job.topic,
+        slot_name=job.slot_name,
+        scheduled_time=job.scheduled_time,
+        job_id=job.id,
+    )
+
+    assert result.status == JobStatus.CANCELLED
+    assert "quota" in result.error_message.lower()
+
+
+def test_pipeline_rejects_unsafe_script_before_rendering(tmp_path, monkeypatch):
+    db = StateManager(f"sqlite:///{tmp_path}/unsafe_script_test.db")
+    pipe = VideoProductionPipeline(db=db)
+    script = ScriptData(
+        title="Friendly forest animals",
+        description="Learn about animals.",
+        tags=["kids", "animals"],
+        video_format=VideoFormat.SHORTS.value,
+        topic=VideoTopic.ANIMAL_RIDDLES.value,
+        target_duration_seconds=10,
+        scenes=[
+            Scene(
+                narration="A scary monster appears.",
+                visual_description="A friendly forest.",
+                caption_text="Let's explore!",
+            )
+        ],
+        call_to_action="Stay curious!",
+    )
+    monkeypatch.setattr("src.pipeline.script_generator.generate_script", lambda *a, **kw: script)
+    monkeypatch.setattr(
+        "src.pipeline.video_editor.produce_video",
+        lambda *a, **kw: pytest.fail("Unsafe script reached rendering"),
+    )
+
+    job = pipe.run_job(
+        video_format=VideoFormat.SHORTS.value,
+        topic=VideoTopic.ANIMAL_RIDDLES.value,
+        enforce_quota=False,
+    )
+
+    assert job.status == JobStatus.FAILED
+    assert "Script compliance check failed" in job.error_message
+    assert job.video_path is None
+
+
 def test_pipeline_retry_mechanism(tmp_path, monkeypatch):
     db = StateManager(f"sqlite:///{tmp_path}/retry_test.db")
     pipe = VideoProductionPipeline(db=db)
@@ -117,6 +180,21 @@ def test_pipeline_retry_mechanism(tmp_path, monkeypatch):
     retried_job = pipe.retry_job(failed_job.id)
     assert retried_job.status == JobStatus.COMPLETED
     assert retried_job.youtube_id is not None
+    assert retried_job.attempt_count == 2
+
+
+def test_cli_today_uses_configured_timezone(monkeypatch):
+    import src.cli as cli
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 1, 2, tzinfo=timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr(cli, "datetime", FrozenDateTime)
+    monkeypatch.setattr(cli.settings, "timezone", "America/New_York")
+
+    assert cli._today_in_configured_timezone() == "2026-09-30"
 
 
 def test_pipeline_prequeued_job_execution(tmp_path, monkeypatch):

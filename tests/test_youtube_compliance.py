@@ -34,6 +34,31 @@ def test_coppa_compliance_validator_blocks_unsafe_terms():
     assert any("fight" in r for r in result.reasons)
 
 
+def test_coppa_compliance_validator_scans_script_scenes():
+    validator = KidSafetyComplianceValidator()
+    script = ScriptData(
+        title="Friendly forest animals",
+        description="Learn about animals.",
+        tags=["kids", "animals"],
+        video_format=VideoFormat.SHORTS.value,
+        topic=VideoTopic.ANIMAL_RIDDLES.value,
+        target_duration_seconds=10,
+        scenes=[
+            Scene(
+                narration="A scary monster appears.",
+                visual_description="A friendly forest.",
+                caption_text="Let's explore!",
+            )
+        ],
+        call_to_action="Stay curious!",
+    )
+
+    result = validator.validate_script(script)
+
+    assert result.is_compliant is False
+    assert any("scary" in reason for reason in result.reasons)
+
+
 def test_seo_title_optimizer():
     seo = KidsSEOOptimizer()
     short_title = seo.optimize_title("Can You Guess The Mystery Animal?", VideoFormat.SHORTS.value, "animal_riddles")
