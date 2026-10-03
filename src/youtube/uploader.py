@@ -98,7 +98,7 @@ class YouTubeUploader:
                     dt = dt.replace(tzinfo=timezone.utc)
                 if dt > datetime.now(timezone.utc):
                     privacy_status = "private"
-                    publish_at_iso = dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    publish_at_iso = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
             except Exception as e:
                 logger.warning(f"Could not parse scheduled_publish_time '{scheduled_publish_time}': {e}")
 

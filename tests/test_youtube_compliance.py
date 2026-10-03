@@ -74,7 +74,13 @@ def test_seo_description_optimizer():
     ("scheduled_time", "expected_privacy", "has_publish_at"),
     [
         (None, "public", False),
-        ((datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(), "private", True),
+        (
+            (datetime.now(timezone.utc) + timedelta(hours=1))
+            .astimezone(timezone(timedelta(hours=5)))
+            .isoformat(),
+            "private",
+            True,
+        ),
     ],
 )
 def test_uploader_uses_youtube_valid_privacy_status(
@@ -113,6 +119,7 @@ def test_uploader_uses_youtube_valid_privacy_status(
             topic=VideoTopic.ANIMAL_RIDDLES.value,
             target_duration_seconds=30,
             scenes=[],
+            call_to_action="Try another riddle!",
         ),
         scheduled_publish_time=scheduled_time,
     )
@@ -120,3 +127,8 @@ def test_uploader_uses_youtube_valid_privacy_status(
     assert result.success
     assert captured["body"]["status"]["privacyStatus"] == expected_privacy
     assert ("publishAt" in captured["body"]["status"]) is has_publish_at
+    if has_publish_at:
+        expected_publish_at = datetime.fromisoformat(scheduled_time).astimezone(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%S.000Z"
+        )
+        assert captured["body"]["status"]["publishAt"] == expected_publish_at
