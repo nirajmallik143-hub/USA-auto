@@ -38,9 +38,9 @@ jobs:
       COPPA_MADE_FOR_KIDS: "true"
       YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
       YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-    steps:
+      TELEGRAM_BOT_TOKEN: 8977932951:AAEXovCGwHha8LSxpNUAMqy8Cxnch7Pm69k
+      TELEGRAM_CHAT_ID: nepal 
+    steps: 
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
