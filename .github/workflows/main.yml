@@ -32,8 +32,8 @@ jobs:
       DB_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       DATABASE_URL: sqlite:///output/${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      OPENAI_API_KEY: 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
+      pixabay_API_KEY: 57822629-4f197bbf16c8182521252a2f3
       TTS_ENGINE: gtts
       COPPA_MADE_FOR_KIDS: "true"
       YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
