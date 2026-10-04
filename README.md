@@ -111,7 +111,6 @@ The pipeline distributes 7 video releases throughout the day (US Eastern Time):
 
 ```
 .
-├── .env.example                     # Environment variables template
 ├── Dockerfile                       # Production container definition
 ├── docker-compose.yml               # Celery, Redis, & standalone orchestration
 ├── pyproject.toml                   # Project packaging and metadata
@@ -208,7 +207,7 @@ Pydroid can run individual jobs, but Android may stop background apps, so the co
    ```
    If Pillow or NumPy cannot be installed with pip, install them using Pydroid's repository plugin.
 3. Provide an FFmpeg executable that can run from Pydroid's app environment, and set `FFMPEG_BINARY` to its full path before starting Python. Android may prevent executing binaries from shared storage; the binary must be executable from the app.
-4. In Pydroid, open the repository's `make.py` and tap Run. It starts one fast Short preview and forces YouTube dry-run, so it will not upload anything. You can also run the equivalent command in Pydroid's terminal:
+4. In Pydroid, open the repository's `make.py` and tap Run. It starts one fast Short preview and forces YouTube dry-run, so it will not upload anything. If FFmpeg is unavailable, the launcher explains that `FFMPEG_BINARY` must point to an executable FFmpeg binary. You can also run the same preview from Pydroid's terminal:
    ```bash
    python make.py
    ```
@@ -220,27 +219,25 @@ The Android dependency profile omits Celery and Redis, which are only needed for
 
 ## Environment Configuration
 
-Copy `.env.example` to `.env` and configure your API keys:
+Settings are loaded from environment variables and, optionally, a local `.env` file in the project directory. Create the file yourself if you prefer it to exporting variables; do not commit it.
 
-```bash
-cp .env.example .env
-```
-
-Key environment variables:
+Common settings supported by `src/config.py`:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `LLM_PROVIDER` | `openai`, `anthropic`, or `procedural` | `openai` |
-| `OPENAI_API_KEY` | OpenAI API Key | `""` |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API Key | `""` |
-| `TTS_PROVIDER` | `elevenlabs` or `gtts` | `gtts` |
-| `ELEVENLABS_API_KEY`| ElevenLabs API Key | `""` |
-| `PEXELS_API_KEY` | Pexels Stock Video API Key | `""` |
-| `YOUTUBE_CLIENT_SECRETS_FILE` | Path to `client_secrets.json` | `client_secrets.json` |
-| `DATABASE_URL` | SQLite or PostgreSQL connection string | `sqlite:///output/pipeline.db` |
-| `REDIS_URL` | Redis URL for Celery | `redis://localhost:6379/0` |
-| `DRY_RUN_UPLOAD` | Alias of `YOUTUBE_DRY_RUN`; set `false` to really upload | `true` locally (workflow sets `false`) |
-| `COPPA_MADE_FOR_KIDS`| Strict "Made for Kids" enforcement | `true` |
+| `APP_ENV` | `development`, `testing`, or `production` | `development` |
+| `LLM_PROVIDER` | `openai`, `anthropic`, or `template` (`procedural` is an alias) | `template` |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Optional API keys for the selected LLM | unset |
+| `TTS_ENGINE` | `elevenlabs` or `gtts` (`TTS_PROVIDER` is an alias) | `gtts` |
+| `ELEVENLABS_API_KEY` | Optional ElevenLabs API key | unset |
+| `PEXELS_API_KEY` | Optional Pexels API key for stock visuals | unset |
+| `YOUTUBE_DRY_RUN` | Prevent YouTube uploads (`DRY_RUN_UPLOAD` is an alias) | `true` |
+| `YOUTUBE_CLIENT_SECRETS_FILE` | YouTube OAuth client secrets path | `secrets/client_secrets.json` |
+| `YOUTUBE_CREDENTIALS_FILE` | YouTube OAuth credentials path | `secrets/youtube_credentials.json` |
+| `YOUTUBE_MADE_FOR_KIDS` | Required Made for Kids designation (`COPPA_MADE_FOR_KIDS` is an alias) | `true` |
+| `DATABASE_URL` | Pipeline database URL | `sqlite:///storage/pipeline.db` |
+| `OUTPUT_DIR`, `STORAGE_DIR`, `TEMP_DIR`, `LOG_DIR` | Output and working directories | `output`, `storage`, `temp`, `logs` |
+| `TIMEZONE` | Schedule timezone | `America/New_York` |
 
 > **Offline Mode**: If `OPENAI_API_KEY` or `ELEVENLABS_API_KEY` are left blank, the pipeline gracefully falls back to the internal procedural script engine and `gTTS` voice generation, requiring zero paid external services for full end-to-end operation!
 
@@ -253,7 +250,7 @@ The pipeline includes a rich CLI for direct operations, testing, and monitoring:
 ### 1. Check System Health & Quota Status
 ```bash
 # Verify all components, FFmpeg, directories, and credentials
-python -m src.cli health
+python -m src.cli doctor
 
 # Check today's quota status and recent jobs
 python -m src.cli status
@@ -262,10 +259,10 @@ python -m src.cli status
 ### 2. Generate an Ad-Hoc Video
 ```bash
 # Generate a vertical Short (9:16) with animal riddles (preview mode: generates fast 5s preview)
-python -m src.cli run-single --format shorts --topic animal_riddles --preview
+python -m src.cli generate-one --format shorts --topic animal_riddles --preview
 
 # Generate a horizontal Long video (16:9) with space facts
-python -m src.cli run-single --format long --topic space_facts --preview
+python -m src.cli generate-one --format long --topic space_facts --preview
 ```
 
 ### 3. Run Today's Full Daily Batch
