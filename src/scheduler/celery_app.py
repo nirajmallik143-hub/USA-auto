@@ -85,44 +85,19 @@ def queue_daily_slots_task():
     return {"date": date_str, "queued_count": len(jobs)}
 
 
-# Configure Celery Beat Periodic Schedule
+# Configure Celery Beat from the same slot definitions as the standalone scheduler.
 beat_schedule = {
-    # 5 Shorts slots (08:00, 12:00, 14:30, 18:30, 20:30)
-    "slot-1-morning-short": {
+    f"slot-{slot.slot_name}": {
         "task": "tasks.run_slot",
-        "schedule": crontab(hour=8, minute=0),
-        "args": ("slot_1_morning_short", VideoFormat.SHORTS.value),
-    },
-    "slot-2-morning-long": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=10, minute=0),
-        "args": ("slot_2_morning_long", VideoFormat.LONG.value),
-    },
-    "slot-3-lunch-short": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=12, minute=0),
-        "args": ("slot_3_lunch_short", VideoFormat.SHORTS.value),
-    },
-    "slot-4-afternoon-short": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=14, minute=30),
-        "args": ("slot_4_afternoon_short", VideoFormat.SHORTS.value),
-    },
-    "slot-5-afterschool-long": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=16, minute=30),
-        "args": ("slot_5_afterschool_long", VideoFormat.LONG.value),
-    },
-    "slot-6-dinner-short": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=18, minute=30),
-        "args": ("slot_6_dinner_short", VideoFormat.SHORTS.value),
-    },
-    "slot-7-bedtime-short": {
-        "task": "tasks.run_slot",
-        "schedule": crontab(hour=20, minute=30),
-        "args": ("slot_7_bedtime_short", VideoFormat.SHORTS.value),
-    },
+        "schedule": crontab(
+            hour=int(slot.time_str.split(":")[0]),
+            minute=int(slot.time_str.split(":")[1]),
+        ),
+        "args": (slot.slot_name, slot.video_format),
+    }
+    for slot in daily_schedule.get_slots_for_date()
+}
+beat_schedule.update({
     # Periodic retry watcher every 5 minutes
     "periodic-retry-failed-jobs": {
         "task": "tasks.retry_failed_jobs",
@@ -133,6 +108,6 @@ beat_schedule = {
         "task": "tasks.queue_daily_slots",
         "schedule": crontab(hour=0, minute=1),
     },
-}
+})
 
 celery_app.conf.beat_schedule = beat_schedule

@@ -40,6 +40,16 @@ def test_daily_schedule_slots_generation():
     assert [s.time_str for s in slots] == expected_times
 
 
+def test_daily_schedule_uses_eastern_daylight_saving_time():
+    mgr = DailyScheduleManager()
+    winter = mgr.get_slots_for_date("2026-01-15")[0].get_scheduled_datetime("2026-01-15")
+    summer = mgr.get_slots_for_date("2026-07-15")[0].get_scheduled_datetime("2026-07-15")
+
+    assert winter.strftime("%H:%M") == summer.strftime("%H:%M") == "08:00"
+    assert winter.utcoffset().total_seconds() == -5 * 60 * 60
+    assert summer.utcoffset().total_seconds() == -4 * 60 * 60
+
+
 def test_queue_manager_queues_all_slots(tmp_path):
     db = StateManager(f"sqlite:///{tmp_path}/queue_test.db")
     qm = QueueManager(db=db)
