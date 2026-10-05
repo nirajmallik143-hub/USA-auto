@@ -1,9 +1,6 @@
 name: Daily USA Kids Videos
 
 on:
-  schedule:
-    - cron: "0 11 * * *"   # primary: 11:00 UTC (6-7 AM US Eastern)
-    - cron: "0 15 * * *"   # backup: no-op if the primary run already uploaded everything
   workflow_dispatch:
     inputs:
       video_count:
@@ -13,7 +10,7 @@ on:
       dry_run:
         description: "Dry run (do not upload to YouTube)"
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: daily-videos
@@ -32,14 +29,16 @@ jobs:
       DB_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       DATABASE_URL: sqlite:///output/${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
-      OPENAI_API_KEY: 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
-      pixabay_API_KEY: 57822629-4f197bbf16c8182521252a2f3
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       TTS_ENGINE: gtts
       COPPA_MADE_FOR_KIDS: "true"
       YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
       YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
-      TELEGRAM_BOT_TOKEN: 8977932951:AAEXovCGwHha8LSxpNUAMqy8Cxnch7Pm69k
-      TELEGRAM_CHAT_ID: nepal 
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps: 
       - uses: actions/checkout@v4
 

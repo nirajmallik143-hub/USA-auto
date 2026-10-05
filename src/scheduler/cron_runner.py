@@ -58,11 +58,15 @@ class StandaloneScheduler:
         tz = zoneinfo.ZoneInfo(settings.timezone)
 
         # 1. Register 7 daily slots
-        # Default daily slot times: 08:00, 10:00, 12:00, 14:30, 16:30, 18:30, 20:30
+        # Start production one hour before each configured release time.
         slots = daily_schedule.get_slots_for_date()
         for slot in slots:
-            hour, minute = map(int, slot.time_str.split(":"))
-            trigger = CronTrigger(hour=hour, minute=minute, timezone=tz)
+            preparation_time = slot.get_preparation_datetime()
+            trigger = CronTrigger(
+                hour=preparation_time.hour,
+                minute=preparation_time.minute,
+                timezone=tz,
+            )
             self.scheduler.add_job(
                 _job_slot_trigger,
                 trigger=trigger,
