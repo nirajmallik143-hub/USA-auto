@@ -90,8 +90,8 @@ beat_schedule = {
     f"slot-{slot.slot_name}": {
         "task": "tasks.run_slot",
         "schedule": crontab(
-            hour=int(slot.time_str.split(":")[0]),
-            minute=int(slot.time_str.split(":")[1]),
+            hour=slot.get_preparation_datetime().hour,
+            minute=slot.get_preparation_datetime().minute,
         ),
         "args": (slot.slot_name, slot.video_format),
     }

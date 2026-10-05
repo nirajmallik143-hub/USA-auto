@@ -42,12 +42,15 @@ def test_daily_schedule_slots_generation():
 
 def test_daily_schedule_uses_eastern_daylight_saving_time():
     mgr = DailyScheduleManager()
-    winter = mgr.get_slots_for_date("2026-01-15")[0].get_scheduled_datetime("2026-01-15")
-    summer = mgr.get_slots_for_date("2026-07-15")[0].get_scheduled_datetime("2026-07-15")
+    winter_slot = mgr.get_slots_for_date("2026-01-15")[0]
+    summer_slot = mgr.get_slots_for_date("2026-07-15")[0]
+    winter = winter_slot.get_scheduled_datetime("2026-01-15")
+    summer = summer_slot.get_scheduled_datetime("2026-07-15")
 
     assert winter.strftime("%H:%M") == summer.strftime("%H:%M") == "08:00"
     assert winter.utcoffset().total_seconds() == -5 * 60 * 60
     assert summer.utcoffset().total_seconds() == -4 * 60 * 60
+    assert winter_slot.get_preparation_datetime("2026-01-15").strftime("%H:%M") == "07:00"
 
 
 def test_queue_manager_queues_all_slots(tmp_path):

@@ -285,7 +285,7 @@ python -m src.cli retry
 ## Running the Scheduler
 
 ### Production scheduler: Standalone APScheduler
-Use one continuously running APScheduler instance for production. It reads slot names and times from the shared daily schedule and uses `America/New_York` to follow daylight-saving time. Keep its SQLite database on persistent storage so job state and daily quotas survive restarts:
+Use one continuously running APScheduler instance for production. It reads slot names and release times from the shared daily schedule, starts production 60 minutes before each release, and uses `America/New_York` to follow daylight-saving time. Keep its SQLite database on persistent storage so job state and daily quotas survive restarts:
 ```bash
 python -m src.scheduler.cron_runner
 ```
@@ -329,7 +329,6 @@ The workflow `.github/workflows/main.yml` is manual-only and is not the producti
    | :--- | :--- |
    | `YOUTUBE_CLIENT_SECRETS_JSON` | full contents of `secrets/client_secrets.json` |
    | `YOUTUBE_TOKEN_JSON` | full contents of `secrets/youtube_credentials.json` |
-   | `OPENAI_API_KEY` | optional (needs `LLM_PROVIDER=openai`) |
    | `OPENAI_API_KEY`, `PIXABAY_API_KEY` | optional content and stock-media services |
    | `PEXELS_API_KEY` | optional stock visuals |
    | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional failure notifications |
