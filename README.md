@@ -329,8 +329,7 @@ The workflow `.github/workflows/main.yml` is manual-only and is not the producti
    | :--- | :--- |
    | `YOUTUBE_CLIENT_SECRETS_JSON` | full contents of `secrets/client_secrets.json` |
    | `YOUTUBE_TOKEN_JSON` | full contents of `secrets/youtube_credentials.json` |
-   | `OPENAI_API_KEY`, `PIXABAY_API_KEY` | optional content and stock-media services |
-   | `PEXELS_API_KEY` | optional stock visuals |
+   | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PIXABAY_API_KEY`, `PEXELS_API_KEY` | optional content and stock-media services |
    | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional failure notifications |
 
    Repository **variables**: `LLM_PROVIDER` (optional: `procedural` (default), `openai`, `anthropic`). Production credentials must be injected through the deployment platform's secret store, not committed or copied into this repository.

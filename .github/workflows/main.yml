@@ -30,7 +30,9 @@ jobs:
       DATABASE_URL: sqlite:///output/${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       TTS_ENGINE: gtts
       COPPA_MADE_FOR_KIDS: "true"
       YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
