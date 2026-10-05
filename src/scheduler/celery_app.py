@@ -9,7 +9,7 @@ import zoneinfo
 from celery import Celery
 from celery.schedules import crontab
 
-from src.config import VideoFormat, settings
+from src.config import settings
 from src.logger import logger
 from src.pipeline import pipeline
 from src.scheduler.daily_schedule import daily_schedule

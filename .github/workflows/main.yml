@@ -10,7 +10,7 @@ on:
       dry_run:
         description: "Dry run (do not upload to YouTube)"
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: daily-videos

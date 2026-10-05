@@ -93,17 +93,17 @@ Built with strict **COPPA compliance**, resilient job queueing with automatic re
 
 ## Daily Schedule & Quota Matrix
 
-The pipeline distributes 7 video releases throughout the day (US Eastern Time):
+The pipeline targets five Shorts and two long-form videos each day. These local release times use `America/New_York`; daylight-saving changes are handled by the configured timezone, so the corresponding UTC time varies seasonally.
 
-| Slot ID | Time (EST) | Time (UTC) | Format | Aspect Ratio | Target Duration | Theme Affinity |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `slot_1_morning_short` | 07:00 AM | 11:00 AM | Shorts | 9:16 (Vertical) | 30–50 sec | Alphabet / Numbers |
-| `slot_2_morning_long` | 09:30 AM | 01:30 PM | Long | 16:9 (Horizontal) | 3–6 min | Moral Stories / Space Facts |
-| `slot_3_midday_short` | 12:00 PM | 04:00 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Animal Riddles |
-| `slot_4_afternoon_short` | 02:30 PM | 06:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Kids Jokes & Puzzles |
-| `slot_5_afternoon_long` | 04:30 PM | 08:30 PM | Long | 16:9 (Horizontal) | 3–6 min | Science / Dinosaurs |
-| `slot_6_early_evening_short` | 06:30 PM | 10:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Dinosaur Fun Facts |
-| `slot_7_bedtime_short` | 08:00 PM | 12:00 AM | Shorts | 9:16 (Vertical) | 30–50 sec | Bedtime Wonder / Calm Riddle |
+| Slot ID | Time (Eastern) | Format | Aspect Ratio | Target Duration | Theme |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `slot_1_morning_short` | 08:00 AM | Shorts | 9:16 (Vertical) | 30–50 sec | Rotating Shorts topic |
+| `slot_2_morning_long` | 10:00 AM | Long | 16:9 (Horizontal) | 3–6 min | Rotating Long topic |
+| `slot_3_lunch_short` | 12:00 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Rotating Shorts topic |
+| `slot_4_afternoon_short` | 02:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Rotating Shorts topic |
+| `slot_5_afterschool_long` | 04:30 PM | Long | 16:9 (Horizontal) | 3–6 min | Rotating Long topic |
+| `slot_6_dinner_short` | 06:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Rotating Shorts topic |
+| `slot_7_bedtime_short` | 08:30 PM | Shorts | 9:16 (Vertical) | 30–50 sec | Rotating Shorts topic |
 
 ---
 
@@ -284,52 +284,32 @@ python -m src.cli retry
 
 ## Running the Scheduler
 
-### Option 1: Standalone APScheduler (Local / VM)
-Runs continuously as a background Python service using APScheduler:
+### Production scheduler: Standalone APScheduler
+Use one continuously running APScheduler instance for production. It reads slot names and times from the shared daily schedule and uses `America/New_York` to follow daylight-saving time. Keep its SQLite database on persistent storage so job state and daily quotas survive restarts:
 ```bash
 python -m src.scheduler.cron_runner
 ```
-- Schedules jobs at the 7 configured daily release times.
-- Runs a failed-job retry pass every 30 minutes.
-- Resets daily quota tracker at midnight.
 
-### Option 2: Celery + Redis (Distributed Cloud)
-For distributed setups running on AWS, GCP, or a dedicated VPS:
-
-1. **Start Redis**:
-   ```bash
-   redis-server
-   ```
-
-2. **Start Celery Worker**:
-   ```bash
-   celery -A src.scheduler.celery_app worker --loglevel=info --concurrency=2
-   ```
-
-3. **Start Celery Beat Scheduler**:
-   ```bash
-   celery -A src.scheduler.celery_app beat --loglevel=info
-   ```
-
-### Option 3: Docker & Docker Compose
-The easiest way to run the complete distributed stack:
-
+For Docker, start only the standalone scheduler:
 ```bash
-# Build and start Redis, Celery Worker, and Celery Beat
-docker-compose up -d
-
-# Check service logs
-docker-compose logs -f celery_worker
-
-# To run the standalone APScheduler container instead:
-docker-compose --profile standalone up -d standalone_scheduler
+docker compose --profile standalone up -d standalone_scheduler
+docker compose logs -f standalone_scheduler
 ```
+The Compose `app_data` volume persists its SQLite state across container restarts.
+
+Do not enable the GitHub Actions scheduled workflow or start Celery Beat at the same time as this production scheduler. Celery remains an optional alternative for a separate deployment; do not run both schedulers against the same channel.
+
+### Optional alternative: Celery + Redis
+Only use this instead of APScheduler when intentionally deploying the distributed worker setup:
+   ```bash
+   docker compose --profile celery up -d
+   ```
 
 ---
 
-## GitHub Actions Automation (Fully Automated Uploads)
+## GitHub Actions (Manual Validation)
 
-The workflow `.github/workflows/main.yml` runs `python -m src.cli run-daily` every day (11:00 UTC, with a 15:00 UTC backup run), then `retry-failed`, then verifies the result. It uploads for real by default; use the manual run's **dry_run** input to test.
+The workflow `.github/workflows/main.yml` is manual-only and is not the production scheduler. Use it for controlled validation; its `dry_run` input defaults to true. Do not dispatch a real-upload batch while the production scheduler is running.
 
 ### One-time setup checklist
 
@@ -342,28 +322,27 @@ The workflow `.github/workflows/main.yml` runs `python -m src.cli run-daily` eve
    python -m src.cli auth            # add --no-browser on a headless machine
    ```
    This writes `secrets/youtube_credentials.json`, which contains a refresh token.
-6. **Add GitHub secrets** (Settings > Secrets and variables > Actions):
+6. **Rotate exposed credentials before enabling uploads.** Previously embedded credentials were committed in workflow history. Revoke and replace them with their providers, then arrange to remove the exposed values from repository history. Removing them from the current workflow does not make the old credentials safe.
+7. **Add new values as GitHub secrets** (Settings > Secrets and variables > Actions); never put credential values in workflow YAML:
 
    | Secret | Value |
    | :--- | :--- |
    | `YOUTUBE_CLIENT_SECRETS_JSON` | full contents of `secrets/client_secrets.json` |
    | `YOUTUBE_TOKEN_JSON` | full contents of `secrets/youtube_credentials.json` |
    | `OPENAI_API_KEY` | optional (needs `LLM_PROVIDER=openai`) |
+   | `OPENAI_API_KEY`, `PIXABAY_API_KEY` | optional content and stock-media services |
    | `PEXELS_API_KEY` | optional stock visuals |
    | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | optional failure notifications |
 
-   Repository **variables**: `LLM_PROVIDER` (optional: `procedural` (default), `openai`, `anthropic`).
-7. **Turn uploads on**: nothing to do - scheduled runs upload (`DRY_RUN_UPLOAD=false`). Dry-run only happens when you tick *dry_run* on a manual run.
-8. **Verify**: locally run `python -m src.cli doctor` (checks ffmpeg, credentials, token refresh, channel access, writable dirs). Then run the workflow manually (Actions > *Daily USA Kids Videos* > Run workflow) with *video_count* `1` and check the channel.
+   Repository **variables**: `LLM_PROVIDER` (optional: `procedural` (default), `openai`, `anthropic`). Production credentials must be injected through the deployment platform's secret store, not committed or copied into this repository.
+8. **Verify before rollout**: run `python -m src.cli doctor`, then use the manual workflow with dry-run enabled. Once credential rotation, OAuth/channel access, API quota, and test uploads are confirmed, test one Short and one long video with publishing enabled before starting the production scheduler.
 
 ### How it stays reliable
 
-- **State** (`output/pipeline.db`) is restored from and saved to the Actions cache on every run (even on failure), so quotas, topic rotation and retries persist. Dry runs use a separate database.
+- **State**: the production SQLite database must be on persistent storage; the Docker deployment persists it in `app_data`. Manual GitHub Actions runs cache state separately and are not the production ledger.
 - **Failures are visible**: `run-daily` / `status --check` exit non-zero when any job FAILED or nothing was uploaded; a GitHub issue (label `automation-failure`) is opened or commented on, and Telegram is notified if configured.
-- **Idempotent**: the primary and backup runs share the daily quota, so a second run never duplicates uploads. Runs are serialized by `concurrency: daily-videos`.
-- **Quota**: each upload costs 1,600 units of the default 10,000/day YouTube API quota (~6 uploads/day). On `quotaExceeded`/`uploadLimitExceeded` the batch stops gracefully and remaining slots are picked up by the next run; request a quota increase for 7 videos/day. New API projects must also pass YouTube's API audit, otherwise uploads are locked as private.
-- **Token refresh**: the access token is refreshed automatically each run from the long-lived refresh token (Google does not rotate it, so the secret needs no update). If it is revoked or expired the run fails with an `invalid_grant` message: re-run `python -m src.cli auth` and update `YOUTUBE_TOKEN_JSON`.
-- **Keep-alive**: `.github/workflows/keepalive.yml` re-enables the scheduled workflows twice a month so GitHub does not disable them after 60 days of inactivity.
+- **Daily success**: inspect `python -m src.cli status` and confirm the persisted quota is 5/5 Shorts and 2/2 long videos. Failed jobs are reported and retried according to the configured retry policy.
+- **Quota**: monitor YouTube API usage and upload limits before rollout. If quota prevents seven uploads per day, request the required quota increase; do not treat a scheduled job as a successful upload until state records it completed.
 
 ---
 
