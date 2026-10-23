@@ -13,6 +13,10 @@ def test_settings_defaults():
     assert s.max_job_retries == 3
 
 
+def test_procedural_provider_alias():
+    assert Settings(llm_provider="procedural").llm_provider == LLMProvider.TEMPLATE
+
+
 def test_video_format_enum():
     assert VideoFormat.SHORTS.value == "shorts"
     assert VideoFormat.LONG.value == "long"
