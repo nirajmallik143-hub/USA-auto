@@ -162,6 +162,23 @@ def test_doctor_reports_missing_ffmpeg(monkeypatch):
         cli.cmd_doctor(Namespace())
 
 
+def test_doctor_checks_configured_ffmpeg_binary(monkeypatch):
+    checked = []
+    monkeypatch.setenv("FFMPEG_BINARY", "/data/data/app/ffmpeg")
+
+    def find_binary(binary):
+        checked.append(binary)
+        return binary
+
+    monkeypatch.setattr(preflight.shutil, "which", find_binary)
+
+    result = preflight.check_ffmpeg()
+
+    assert checked == ["/data/data/app/ffmpeg"]
+    assert result.ok
+    assert "found at /data/data/app/ffmpeg" == result.message
+
+
 def test_doctor_live_requires_credentials(monkeypatch, tmp_path):
     monkeypatch.setattr(preflight.settings, "youtube_dry_run", False)
     monkeypatch.setattr(preflight.settings, "youtube_client_secrets_file", tmp_path / "a.json")

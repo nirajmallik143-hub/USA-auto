@@ -2,6 +2,7 @@
 Preflight ("doctor") checks that verify the environment can produce and upload videos.
 """
 
+import os
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -20,10 +21,11 @@ class CheckResult:
 
 
 def check_ffmpeg() -> CheckResult:
-    path = shutil.which("ffmpeg")
+    binary = os.environ.get("FFMPEG_BINARY", "ffmpeg")
+    path = shutil.which(binary)
     if path:
         return CheckResult("ffmpeg", True, f"found at {path}")
-    return CheckResult("ffmpeg", False, "ffmpeg is not installed (apt-get install ffmpeg)")
+    return CheckResult("ffmpeg", False, "ffmpeg is unavailable; install it or set FFMPEG_BINARY to its executable path")
 
 
 def check_env() -> List[CheckResult]:
