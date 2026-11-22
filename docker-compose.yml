@@ -1,6 +1,8 @@
 services:
   # Redis message broker and result backend for Celery
   redis:
+    profiles:
+      - celery
     image: redis:7-alpine
     container_name: usa_kids_redis
     ports:
@@ -16,6 +18,8 @@ services:
 
   # Celery Worker for asynchronous video generation and YouTube publishing
   celery_worker:
+    profiles:
+      - celery
     build: .
     container_name: usa_kids_celery_worker
     command: celery -A src.scheduler.celery_app worker --loglevel=info --concurrency=2
@@ -37,6 +41,8 @@ services:
 
   # Celery Beat periodic scheduler triggering 7 daily video slots
   celery_beat:
+    profiles:
+      - celery
     build: .
     container_name: usa_kids_celery_beat
     command: celery -A src.scheduler.celery_app beat --loglevel=info

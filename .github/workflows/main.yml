@@ -1,9 +1,6 @@
 name: Daily USA Kids Videos
 
 on:
-  schedule:
-    - cron: "0 11 * * *"   # primary: 11:00 UTC (6-7 AM US Eastern)
-    - cron: "0 15 * * *"   # backup: no-op if the primary run already uploaded everything
   workflow_dispatch:
     inputs:
       video_count:
@@ -13,7 +10,7 @@ on:
       dry_run:
         description: "Dry run (do not upload to YouTube)"
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: daily-videos
@@ -31,8 +28,10 @@ jobs:
       DRY_RUN_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
       DB_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       DATABASE_URL: sqlite:///output/${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
-      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'template' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       TTS_ENGINE: gtts
       COPPA_MADE_FOR_KIDS: "true"
@@ -40,7 +39,7 @@ jobs:
       YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-    steps:
+    steps: 
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5

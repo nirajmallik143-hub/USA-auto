@@ -12,6 +12,9 @@ from src.config import VideoFormat, settings
 from src.content.topic_rotator import topic_rotator
 
 
+PREPARATION_MINUTES = 60
+
+
 @dataclass
 class ScheduledSlot:
     slot_id: str
@@ -30,6 +33,10 @@ class ScheduledSlot:
             hour=hour, minute=minute, second=0, microsecond=0, tzinfo=tz
         )
         return local_dt
+
+    def get_preparation_datetime(self, target_date: Optional[str] = None) -> datetime:
+        """Start production early enough to schedule upload for the release time."""
+        return self.get_scheduled_datetime(target_date) - timedelta(minutes=PREPARATION_MINUTES)
 
 
 class DailyScheduleManager:
