@@ -45,6 +45,6 @@ jobs:
           EARN_MODE: ${{ github.event.inputs.mode }}
           REPO_NAME: ${{ github.repository }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
-          CHECKOUT_URL: https://mallikgroup.gumroad.com
+          CHECKOUT_URL: YOUR_REAL_CHECKOUT_URL
           SPONSOR_URL: https://github.com/sponsors/Mallikgroup-for-Humanity
         run: python3 scripts/argon_earning_engine.py

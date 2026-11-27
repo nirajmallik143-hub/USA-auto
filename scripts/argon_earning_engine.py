@@ -12,7 +12,7 @@ issue_body = os.environ.get("ISSUE_BODY", "").strip()
 earn_mode = os.environ.get("EARN_MODE", "").strip() or "micro_saas"
 repo_name = os.environ["REPO_NAME"]
 base_branch = os.environ.get("BASE_BRANCH") or "main"
-checkout_url = os.environ.get("CHECKOUT_URL", "https://mallikgroup.gumroad.com")
+checkout_url = os.environ.get("CHECKOUT_URL", "YOUR_REAL_CHECKOUT_URL")
 sponsor_url = os.environ.get("SPONSOR_URL", "https://github.com/sponsors/Mallikgroup-for-Humanity")
 today_tag = datetime.datetime.utcnow().strftime("%Y%m%d")
 
