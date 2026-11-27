@@ -1,0 +1,50 @@
+name: Argon Autonomous Earning Engine
+
+on:
+  issues:
+    types: [opened, labeled]
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Earning Mode (micro_saas | digital_product | seo_growth | sponsor_audit)"
+        required: true
+        default: "micro_saas"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  argon-revenue-builder:
+    if: github.actor != 'argon-agent[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install --quiet google-genai
+
+      - name: Run Argon Earning Engine
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          EARN_MODE: ${{ github.event.inputs.mode }}
+          REPO_NAME: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          CHECKOUT_URL: https://mallikgroup.gumroad.com
+          SPONSOR_URL: https://github.com/sponsors/Mallikgroup-for-Humanity
+        run: python3 scripts/argon_earning_engine.py

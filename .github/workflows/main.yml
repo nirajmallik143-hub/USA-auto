@@ -28,7 +28,7 @@ jobs:
       DRY_RUN_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
       DB_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
       DATABASE_URL: sqlite:///output/${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'pipeline_dryrun.db' || 'pipeline.db' }}
-      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'procedural' }}
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'template' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
